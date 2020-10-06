@@ -1,34 +1,37 @@
+use std::cell::Cell;
+
 /// Power LED of the flashlight. [pwn] represents the duty cycle.
 pub trait Led {
-    fn set_pwm(&mut self, pwm: u8);
+    fn set_pwm(&self, pwm: u8);
     fn get_pwm(&self) -> u8;
+    fn modify(&self, f: &dyn Fn(u8) -> u8);
 }
 
 /// Led which resides in memory, for simulation or testing
 pub struct DummyLed {
-    pwm: u8
+    pwm: Cell<u8>
 }
 
 impl DummyLed {
     /// Factory function to create a dummy LED
-    pub fn create(pwm: u8) -> Box<dyn Led> {
-        return Box::new(DummyLed { pwm });
+    pub fn create(pwm: u8) -> Self {
+        return DummyLed { pwm: Cell::new(pwm) };
     }
-}
-
-/// Higher level factory function to create a dummy LED
-/// TODO which one is idiomatic?
-pub fn led_create_dummy(pwm: u8) -> Box<dyn Led> {
-    return Box::new(DummyLed { pwm });
 }
 
 impl Led for DummyLed {
-    fn set_pwm(&mut self, pwm: u8) {
-        self.pwm = pwm
+    fn set_pwm(&self, pwm: u8) {
+        self.pwm.set(pwm);
     }
 
     fn get_pwm(&self) -> u8 {
-        return self.pwm;
+        return self.pwm.get();
+    }
+
+    fn modify(&self, f: &dyn Fn(u8) -> u8) {
+        let prev = self.get_pwm();
+        let value = f(prev);
+        self.set_pwm(value)
     }
 }
 

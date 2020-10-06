@@ -2,7 +2,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use std::io::{stdout, Write};
+use std::io::{stdout};
 
 use crossterm::{
     ExecutableCommand,
@@ -12,7 +12,7 @@ use crossterm::{
 use crossterm::cursor::{MoveTo, position};
 use crossterm::terminal::{Clear, ClearType};
 
-use crate::led::{led_create_dummy, DummyLed, Led};
+use crate::led::{DummyLed, Led};
 use crate::pin::{KeyboardPin, Pin};
 
 mod pin;
@@ -26,7 +26,7 @@ fn event_loop() {
     let esc_pin = KeyboardPin::create(27);
     let minus_pin = KeyboardPin::create(37);
     let plus_pin = KeyboardPin::create(39);
-    let mut led = led_create_dummy(0);
+    let led = DummyLed::create(0);
 
     stdout().execute(Print("Running light\n"));
     let (x, y) = position().unwrap();
@@ -36,16 +36,15 @@ fn event_loop() {
         if esc_pin.is_down() { break; }
 
         if plus_pin.is_down() {
-            if led.get_pwm() < 255
-            {
-                led.set_pwm(led.get_pwm() + 1);
-            }
+            led.modify(&|current: u8| {
+                if current < 8 { current + 1 } else { current }
+            });
         }
 
         if minus_pin.is_down() {
-            if led.get_pwm() != 0 {
-                led.set_pwm(led.get_pwm() - 1);
-            }
+            led.modify(&|current: u8| {
+                if current > 0 { current - 1 } else { current }
+            });
         }
 
         render_flashlight_state(x, y, led.get_pwm());

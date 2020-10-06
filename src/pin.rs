@@ -18,13 +18,6 @@ impl KeyboardPin {
         let device_state = DeviceState::new();
         return KeyboardPin { device_state, key_code };
     }
-
-    /// Factory function to create a [KeyboardPin]
-    /// TODO is it ok to use Box with factory functions?
-    pub fn create_boxed(key_code: u16) -> Box<dyn Pin> {
-        let device_state = DeviceState::new();
-        return Box::new(KeyboardPin { device_state, key_code });
-    }
 }
 
 impl Pin for KeyboardPin {
