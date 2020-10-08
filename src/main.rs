@@ -2,7 +2,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use std::io::{stdout};
+use std::io::stdout;
 
 use crossterm::{
     ExecutableCommand,
@@ -12,11 +12,13 @@ use crossterm::{
 use crossterm::cursor::{MoveTo, position};
 use crossterm::terminal::{Clear, ClearType};
 
+use crate::control::LightControl;
 use crate::led::{DummyLed, Led};
 use crate::pin::{KeyboardPin, Pin};
 
 mod pin;
 mod led;
+mod control;
 
 fn main() {
     event_loop()
@@ -28,26 +30,15 @@ fn event_loop() {
     let plus_pin = KeyboardPin::create(39);
     let led = DummyLed::create(0);
 
-    stdout().execute(Print("Running light\n"));
+    let light_control = LightControl { plus_pin, minus_pin, led: &led };
+
     let (x, y) = position().unwrap();
 
     loop {
         sleep(Duration::from_millis(1_00));
         if esc_pin.is_down() { break; }
-
-        if plus_pin.is_down() {
-            led.modify(&|current: u8| {
-                if current < 8 { current + 1 } else { current }
-            });
-        }
-
-        if minus_pin.is_down() {
-            led.modify(&|current: u8| {
-                if current > 0 { current - 1 } else { current }
-            });
-        }
-
-        render_flashlight_state(x, y, led.get_pwm());
+        light_control.tick();
+        if render_flashlight_state(x, y, led.get_pwm()).is_err() { break; }
     }
 }
 
@@ -58,6 +49,6 @@ fn render_flashlight_state(x: u16, y: u16, pwm: u8) -> Result<()> {
         .execute(SetForegroundColor(Color::Blue))?
         .execute(SetBackgroundColor(Color::Red))?
         .execute(Print(format!("pwm: {}", pwm)))?
-        .execute(ResetColor);
-    return Ok(());
+        .execute(ResetColor)
+        .map(|_| ())
 }
