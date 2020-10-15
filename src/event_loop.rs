@@ -1,9 +1,7 @@
 use std::cell::{Cell, RefCell};
-use std::thread::sleep;
-use std::time::Duration;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Msg<T> {
+struct Msg<T> {
     pub when: u32,
     pub payload: T,
 }
@@ -11,13 +9,15 @@ pub struct Msg<T> {
 pub struct EDT<T> {
     now: Cell<u32>,
     queue: RefCell<Vec<Msg<T>>>,
+    sleeper: fn(u32) -> (),
 }
 
 impl<T> EDT<T> {
-    pub fn create() -> EDT<T> {
+    pub fn create(sleeper: fn(u32) -> ()) -> EDT<T> {
         EDT {
             now: Cell::new(0),
             queue: RefCell::new(Vec::new()),
+            sleeper,
         }
     }
 }
@@ -31,27 +31,28 @@ impl<T> EDT<T> {
         self.queue.borrow_mut().clear();
     }
 
-    pub fn poll(&self) -> Option<Msg<T>> {
-        self.queue
-            .borrow_mut()
-            .sort_by_key(|msg| { msg.when });
+    pub fn process_events(&self, handler: &dyn Fn(T)) {
+        loop {
+            if self.queue.borrow().is_empty() {
+                break;
+            } else {
+                self.queue
+                    .borrow_mut()
+                    .sort_by_key(|msg| { msg.when });
 
-        return if self.queue.borrow().is_empty() {
-            None
-        } else {
-            let first = self.queue
-                .borrow_mut()
-                .remove(0);
+                let first = self.queue
+                    .borrow_mut()
+                    .remove(0);
 
-            let millis = first.when - self.now.get();
+                let millis = first.when - self.now.get();
 
-            // println!("Now sleeping: {}", millis);
-            sleep(Duration::from_millis(millis as u64));
+                (self.sleeper)(millis);
 
-            self.now.set(first.when);
+                self.now.set(first.when);
 
-            Some(first)
-        };
+                handler(first.payload);
+            };
+        }
     }
 
     pub fn schedule(&self, delay: u32, payload: T) {
@@ -74,7 +75,7 @@ mod tests {
 
     #[test]
     fn send_some_events() {
-        let edt: EDT<u32> = EDT::create();
+        let edt: EDT<u32> = EDT::create(|_| { /* NOP */ });
         edt.schedule(1000, 1);
         edt.schedule(3000, 2);
         assert_eq!(edt.now.get(), 0);
