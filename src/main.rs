@@ -3,7 +3,7 @@ use std::io::stdout;
 use crossterm::{
     ExecutableCommand,
     Result,
-    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
+    style::{Color, Print, ResetColor, SetBackgroundColor},
 };
 use crossterm::cursor::{MoveTo, position};
 use crossterm::terminal::{Clear, ClearType};
@@ -49,7 +49,7 @@ fn event_loop() {
         }
 
         match edt.poll() {
-            Some(msg) => light_control.process_message(msg),
+            Some(msg) => light_control.process_message(msg.payload),
             None => break,
         }
 
