@@ -3,20 +3,18 @@ use std::thread::sleep;
 use std::time::Duration;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Msg {
-    pub what: i32,
+pub struct Msg<T> {
     pub when: u32,
-    pub arg0: i32,
-    pub arg1: i32,
+    pub payload: T,
 }
 
-pub struct EDT {
+pub struct EDT<T> {
     now: Cell<u32>,
-    queue: RefCell<Vec<Msg>>,
+    queue: RefCell<Vec<Msg<T>>>,
 }
 
-impl EDT {
-    pub fn create() -> EDT {
+impl<T> EDT<T> {
+    pub fn create() -> EDT<T> {
         EDT {
             now: Cell::new(0),
             queue: RefCell::new(Vec::new()),
@@ -27,13 +25,13 @@ impl EDT {
 /// TODO use a handler function instead of poll
 /// TODO make sleep and now injectable
 /// TODO no std
-impl EDT {
+impl<T> EDT<T> {
     pub fn exit(&self) {
         // clearing the queue ends the loop
         self.queue.borrow_mut().clear();
     }
 
-    pub fn poll(&self) -> Option<Msg> {
+    pub fn poll(&self) -> Option<Msg<T>> {
         self.queue
             .borrow_mut()
             .sort_by_key(|msg| { msg.when });
@@ -56,22 +54,16 @@ impl EDT {
         };
     }
 
-    pub fn schedule(&self, delay: u32, what: i32) {
-        self.schedule_with_args(delay, what, 0, 0);
-    }
-
-    pub fn schedule_with_args(&self, delay: u32, what: i32, arg0: i32, arg1: i32) {
+    pub fn schedule(&self, delay: u32, payload: T) {
         let msg = Msg {
-            what,
             when: self.now.get() + delay,
-            arg0,
-            arg1,
+            payload,
         };
         self.queue.borrow_mut().push(msg);
     }
 
-    pub fn remove_with_what(&self, what: i32) {
-        self.queue.borrow_mut().retain(|msg| msg.what != what);
+    pub fn remove<F>(&self, mut predicate: F) where F: FnMut(&T) -> bool {
+        self.queue.borrow_mut().retain(|msg| !predicate(&msg.payload));
     }
 }
 
@@ -82,23 +74,17 @@ mod tests {
 
     #[test]
     fn send_some_events() {
-        let edt = EDT::create();
+        let edt: EDT<u32> = EDT::create();
         edt.schedule(1000, 1);
-        edt.schedule_with_args(3000, 1, 2, 3);
+        edt.schedule(3000, 2);
         assert_eq!(edt.now.get(), 0);
-        assert_eq!(edt.queue.borrow_mut().remove(0),
-                   Msg {
-                       what: 1,
-                       when: 1000,
-                       arg0: 0,
-                       arg1: 0,
-                   });
-        assert_eq!(edt.queue.borrow_mut().remove(0),
-                   Msg {
-                       what: 1,
-                       when: 3000,
-                       arg0: 2,
-                       arg1: 3,
-                   });
+        assert_eq!(
+            edt.queue.borrow_mut().remove(0),
+            Msg { when: 1000, payload: 1 }
+        );
+        assert_eq!(
+            edt.queue.borrow_mut().remove(0),
+            Msg { when: 3000, payload: 2 }
+        );
     }
 }
