@@ -96,3 +96,65 @@ impl<'a, P: Pin> LightControl<'a, P> {
         });
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use crate::control::{LightControl};
+    use crate::event_loop::EDT;
+    use crate::led::{DummyLed, Led, PWM_MAX};
+    use crate::pin::Pin;
+    use crate::rgb::{DummyRgb, Rgb};
+
+    struct TestPin<'a> {
+        is_down: &'a Cell<bool>,
+    }
+
+    impl<'a> Pin for TestPin<'a> {
+        /// returns true is pin is tied to the ground
+        fn is_down(&self) -> bool {
+            return self.is_down.get();
+        }
+    }
+
+    /// TODO extract setup function
+    #[test]
+    fn button_clicks_change_brightness<'t>() {
+        let plus_pin = Cell::new(false);
+        let minus_pin = Cell::new(false);
+        let led = DummyLed::create(0);
+        let rgb = DummyRgb::create();
+        let edt = EDT::create();
+        let light_control = LightControl {
+            plus_pin: TestPin { is_down: &plus_pin },
+            minus_pin: TestPin { is_down: &minus_pin },
+            led: &led,
+            edt: &edt,
+            rgb: &rgb,
+        };
+        light_control.check_buttons();
+
+        let on_next_event = &|action| {
+            light_control.process_message(action);
+            render_flashlight_state(led.get_pwm(), rgb.get_rgb());
+        };
+
+        plus_pin.set(true);
+        edt.process_events(800, on_next_event);
+        assert_eq!(led.get_pwm(), 100);
+
+        plus_pin.set(false);
+        minus_pin.set(true);
+        edt.process_events(800, on_next_event);
+        assert_eq!(led.get_pwm(), 0);
+    }
+
+    fn render_flashlight_state(pwm: u32, rgb: u8) {
+        let mut led_str = String::new();
+        for _ in 0..pwm { led_str.push('*'); }
+        for _ in 0..(PWM_MAX - pwm) { led_str.push(' '); }
+        println!("  [{}]  [{}]", led_str, rgb);
+    }
+}
