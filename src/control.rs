@@ -15,7 +15,7 @@ pub struct LightControl<'a, P: Pin> {
 
 pub enum Action {
     Blink { color: u8, blinks: u32 },
-    CheckButtons,
+    CheckButtons { prev_plus: u32, prev_minus: u32 },
 }
 
 const DELAY_CHECK_BUTTONS: u32 = 75;
@@ -26,7 +26,7 @@ const PWM_STEPS: &'static [u32] = &[0, 1, 4, 9, 16, 25, 36, 49, 64, 81, PWM_MAX]
 impl<'a, P: Pin> LightControl<'a, P> {
     pub fn process_message(&self, action: Action) {
         match action {
-            Action::CheckButtons => self.check_buttons(),
+            Action::CheckButtons { prev_plus, prev_minus } => self.check_buttons(prev_plus, prev_minus),
             Action::Blink { color, blinks } => self.blink_led(color, blinks),
         }
     }
@@ -39,16 +39,24 @@ impl<'a, P: Pin> LightControl<'a, P> {
         }
     }
 
-    pub fn check_buttons(&self) {
+    pub fn check_buttons(&self, prev_plus: u32, prev_minus: u32) {
         if self.plus_pin.is_down() {
-            self.on_plus_clicked();
+            self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons { prev_plus: prev_plus + 1, prev_minus });
+        } else if self.minus_pin.is_down() {
+            self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons { prev_plus, prev_minus: prev_minus + 1 });
+        } else {
+            if prev_plus > 0 {
+                self.on_plus_clicked();
+            }
+            if prev_minus > 0 {
+                self.on_minus_clicked()
+            }
+            self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons { prev_plus: 0, prev_minus: 0 });
         }
+    }
 
-        if self.minus_pin.is_down() {
-            self.on_minus_clicked()
-        }
-
-        self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons);
+    pub fn start(&self) {
+        self.check_buttons(0, 0);
     }
 
     fn on_plus_clicked(&self) {
@@ -102,7 +110,7 @@ impl<'a, P: Pin> LightControl<'a, P> {
 mod tests {
     use std::cell::Cell;
 
-    use crate::control::LightControl;
+    use crate::control::{DELAY_CHECK_BUTTONS, LightControl, PWM_STEPS};
     use crate::event_loop::EDT;
     use crate::led::{Led, PWM_MAX};
     use crate::pin::Pin;
@@ -110,16 +118,47 @@ mod tests {
 
     #[test]
     fn button_clicks_change_brightness() {
-        with_bench(&|advance_time, buttons, pwm| {
-            buttons.press_plus();
-            advance_time(800);
+        with_bench(&|_advance_time, buttons, pwm| {
+            for _ in 0..10 {
+                buttons.click_plus();
+            }
             assert_eq!(pwm.get(), 100);
-            buttons.release_plus();
 
-            buttons.press_minus();
-            advance_time(800);
-            buttons.release_minus();
+            for _ in 0..10 {
+                buttons.click_minus();
+            }
             assert_eq!(pwm.get(), 0);
+        });
+    }
+
+    #[test]
+    fn clicks_can_be_spread_over_time() {
+        with_bench(&|advance_time, buttons, pwm| {
+            for _ in 0..5 {
+                buttons.click_plus();
+                advance_time(1000);
+            }
+            assert_eq!(pwm.get(), 25);
+
+            for _ in 0..5 {
+                buttons.click_minus();
+                advance_time(1000);
+            }
+            assert_eq!(pwm.get(), 0);
+        });
+    }
+
+    #[test]
+    fn long_clicks_have_effect_when_released() {
+        with_bench(&|advance_time, buttons, pwm| {
+            assert_eq!(pwm.get(), PWM_STEPS[0]);
+            for i in 1..5 {
+                buttons.press_plus();
+                advance_time(10000);
+                buttons.release_plus();
+                advance_time(100);
+                assert_eq!(pwm.get(), PWM_STEPS[i]);
+            }
         });
     }
 
@@ -137,7 +176,7 @@ mod tests {
             edt: &edt,
             rgb: &rgb,
         };
-        light_control.check_buttons();
+        light_control.start();
 
         let advance_time = |time: u32| {
             edt.process_events(time, &|action| {
@@ -146,7 +185,11 @@ mod tests {
             });
         };
 
-        block(&advance_time, Buttons { plus_pin: &plus_pin, minus_pin: &minus_pin }, &pwm);
+        block(
+            &advance_time,
+            Buttons { plus_pin: &plus_pin, minus_pin: &minus_pin, advance_time: &advance_time },
+            &pwm,
+        );
     }
 
     fn render_flashlight_state(pwm: u32, rgb: u8) {
@@ -191,12 +234,27 @@ mod tests {
     pub struct Buttons<'a> {
         plus_pin: &'a Cell<bool>,
         minus_pin: &'a Cell<bool>,
+        advance_time: &'a dyn Fn(u32),
     }
 
     impl<'a> Buttons<'a> {
         fn press_plus(&self) { self.plus_pin.set(true); }
         fn release_plus(&self) { self.plus_pin.set(false); }
+        fn click_plus(&self) {
+            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            self.press_plus();
+            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            self.release_plus();
+            (self.advance_time)(DELAY_CHECK_BUTTONS);
+        }
         fn press_minus(&self) { self.minus_pin.set(true); }
         fn release_minus(&self) { self.minus_pin.set(false); }
+        fn click_minus(&self) {
+            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            self.press_minus();
+            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            self.release_minus();
+            (self.advance_time)(DELAY_CHECK_BUTTONS);
+        }
     }
 }

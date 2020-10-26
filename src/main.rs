@@ -42,7 +42,7 @@ fn event_loop() {
         edt: &edt,
         rgb: &rgb,
     };
-    light_control.check_buttons();
+    light_control.start();
 
     let (x, y) = position().unwrap();
 
