@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use crate::control::Action::CheckButtons;
 use crate::event_loop::EDT;
 use crate::led::{Led, PWM_MAX};
@@ -11,6 +13,7 @@ pub struct LightControl<'a, P: Pin> {
     pub led: &'a dyn Led,
     pub rgb: &'a dyn Rgb,
     pub edt: &'a EDT<Action>,
+    pub led_level: Cell<usize>,
 }
 
 pub enum Action {
@@ -60,29 +63,14 @@ impl<'a, P: Pin> LightControl<'a, P> {
     }
 
     fn on_plus_clicked(&self) {
-        self.led.modify(&|current: u32| {
-            // Regarding && see
-            // https://stackoverflow.com/questions/43828013/why-is-being-used-in-closure-arguments
-            *PWM_STEPS
-                .iter()
-                // first higher
-                .find(|&&brightness| { brightness > current })
-                .unwrap_or(&PWM_MAX)
-        });
+        self.increment_led_level(1);
         self.rgb.set_rgb(GREEN);
         self.remove_blinks();
         self.edt.schedule(DELAY_BLINK, Action::Blink { color: GREEN, blinks: 5 });
     }
 
     fn on_minus_clicked(&self) {
-        self.led.modify(&|current: u32| {
-            *PWM_STEPS
-                .iter()
-                // last lower
-                .filter(|&&brightness| { brightness < current })
-                .last()
-                .unwrap_or(&0)
-        });
+        self.decrement_led_level(1);
 
         if self.led.get_pwm() == 0 {
             self.rgb.set_rgb(BLUE);
@@ -102,6 +90,23 @@ impl<'a, P: Pin> LightControl<'a, P> {
                 _ => false
             }
         });
+    }
+
+    fn increment_led_level(&self, inc: usize) {
+        self.change_led_level(inc, true);
+    }
+    fn decrement_led_level(&self, dec: usize) {
+        self.change_led_level(dec, false);
+    }
+    fn change_led_level(&self, change: usize, inc: bool) {
+        let max_level = PWM_STEPS.len() - 1;
+        let current = self.led_level.get();
+        if inc && current == max_level { return; }
+        if !inc && current == 0 { return; }
+
+        let new_level = if inc { current + change } else { current - change };
+        self.led_level.set(new_level);
+        self.led.set_pwm(PWM_STEPS[new_level]);
     }
 }
 
@@ -175,6 +180,7 @@ mod tests {
             led: &led,
             edt: &edt,
             rgb: &rgb,
+            led_level: Cell::new(0),
         };
         light_control.start();
 

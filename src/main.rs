@@ -15,6 +15,7 @@ use crate::event_loop::EDT;
 use crate::led::{DummyLed, Led, PWM_MAX};
 use crate::pin::{KeyboardPin, Pin};
 use crate::rgb::{BLUE, DummyRgb, GREEN, RED, Rgb};
+use std::cell::Cell;
 
 mod pin;
 mod led;
@@ -41,6 +42,7 @@ fn event_loop() {
         led: &led,
         edt: &edt,
         rgb: &rgb,
+        led_level: Cell::new(0),
     };
     light_control.start();
 
