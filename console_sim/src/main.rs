@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::io::stdout;
 use std::thread::sleep;
 use std::time::Duration;
@@ -10,24 +11,21 @@ use crossterm::{
 use crossterm::cursor::{MoveTo, position};
 use crossterm::terminal::{Clear, ClearType};
 
-use crate::control::LightControl;
-use crate::event_loop::EDT;
-use crate::led::{DummyLed, Led, PWM_MAX};
-use crate::pin::{KeyboardPin, Pin};
-use crate::rgb::{BLUE, DummyRgb, GREEN, RED, Rgb};
-use std::cell::Cell;
+use light_control::bsp::led::{Led, PWM_MAX};
+use light_control::bsp::pin::Pin;
+use light_control::bsp::rgb::{BLUE, GREEN, RED, Rgb};
+use light_control::control::LightControl;
+use light_control::edt::EDT;
 
-mod pin;
-mod led;
-mod control;
-mod event_loop;
-mod rgb;
+use crate::dummy_led::DummyLed;
+use crate::dummy_rgb::DummyRgb;
+use crate::keyboard_pin::KeyboardPin;
+
+mod keyboard_pin;
+mod dummy_rgb;
+mod dummy_led;
 
 fn main() {
-    event_loop()
-}
-
-fn event_loop() {
     let esc_pin = KeyboardPin::create(27);
     let minus_pin = KeyboardPin::create(37);
     let plus_pin = KeyboardPin::create(39);
