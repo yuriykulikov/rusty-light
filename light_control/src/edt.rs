@@ -66,8 +66,8 @@ impl<T> EDT<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::event_loop::EDT;
-    use crate::event_loop::Msg;
+    use crate::edt::EDT;
+    use crate::edt::Msg;
 
     #[test]
     fn send_some_events() {

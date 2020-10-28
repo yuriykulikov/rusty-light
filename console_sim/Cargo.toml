@@ -1,5 +1,5 @@
 [package]
-name = "rusty-light"
+name = "console_sim"
 version = "0.1.0"
 authors = ["Yuriy Kulikov <yuriy.kulikov.87@gmail.com>"]
 edition = "2018"
@@ -9,10 +9,4 @@ edition = "2018"
 [dependencies]
 crossterm = "0.18.0"
 keyboard_query = "0.1.0"
-light_control = { path = "./light_control" }
-
-[[bin]]
-name = "console_sim"
-path = "console_sim/src/main.rs"
-test = false
-bench = false
+light_control = { path = "../light_control" }
