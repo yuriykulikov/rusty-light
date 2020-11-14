@@ -19,12 +19,11 @@ pub mod rgb {
 }
 
 pub mod led {
-    pub const PWM_MAX: u32 = 100;
+    pub const MAX: u32 = 100;
 
     /// Power LED of the flashlight. [pwn] represents the duty cycle.
     pub trait Led {
-        fn set_pwm(&self, pwm: u32);
-        fn get_pwm(&self) -> u32;
-        fn modify(&self, f: &dyn Fn(u32) -> u32);
+        fn set(&self, duty_cycle: u32);
+        fn get(&self) -> u32;
     }
 }
