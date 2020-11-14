@@ -5,7 +5,7 @@ mod tests {
     use light_control::bsp::led::{Led, MAX};
     use light_control::bsp::pin::Pin;
     use light_control::bsp::rgb::Rgb;
-    use light_control::control::{DELAY_CHECK_BUTTONS, LightControl, POWER_LEVELS};
+    use light_control::control::{ANIM_DURATION, DELAY_CHECK_BUTTONS, LightControl, POWER_LEVELS};
     use light_control::edt::EDT;
 
     #[test]
@@ -100,7 +100,7 @@ mod tests {
                 buttons.press_plus();
                 advance_time(700);
                 buttons.release_plus();
-                advance_time(100);
+                advance_time(100 + ANIM_DURATION);
                 assert_eq!(power_level.get(), POWER_LEVELS[i]);
             }
         });
@@ -185,6 +185,7 @@ mod tests {
             (self.advance_time)(DELAY_CHECK_BUTTONS);
             self.release_plus();
             (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(ANIM_DURATION);
         }
         fn press_minus(&self) { self.minus_pin.set(true); }
         fn release_minus(&self) { self.minus_pin.set(false); }
@@ -194,6 +195,7 @@ mod tests {
             (self.advance_time)(DELAY_CHECK_BUTTONS);
             self.release_minus();
             (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(ANIM_DURATION);
         }
         fn long_click_plus(&self) {
             (self.advance_time)(DELAY_CHECK_BUTTONS);
@@ -201,6 +203,7 @@ mod tests {
             (self.advance_time)(1500);
             self.release_plus();
             (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(ANIM_DURATION);
         }
     }
 

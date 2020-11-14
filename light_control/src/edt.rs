@@ -1,7 +1,7 @@
 use no_std_compat::cell::{Cell, RefCell};
 use no_std_compat::cmp::Ordering::Equal;
 
-const SIZE: usize = 5;
+const SIZE: usize = 25;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy)]
 pub struct Msg<T: Sized> {
