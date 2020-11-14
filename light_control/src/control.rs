@@ -1,6 +1,6 @@
 use no_std_compat::cell::Cell;
 
-use crate::bsp::led::{Led, PWM_MAX};
+use crate::bsp::led::{Led, MAX};
 use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{BLUE, GREEN, RED, Rgb};
 use crate::control::Action::CheckButtons;
@@ -26,8 +26,8 @@ pub const DELAY_CHECK_BUTTONS: u32 = 75;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000 / DELAY_CHECK_BUTTONS;
 pub const DELAY_BLINK: u32 = 100;
 
-pub const PWM_STEPS: &'static [u32] = &[0, 1, 4, 9, 16, 25, 36, 49, 64, 81, PWM_MAX];
-const PWM_MAX_LEVEL: usize = PWM_STEPS.len() - 1;
+pub const POWER_LEVELS: &'static [u32] = &[0, 7, 20, 40, 60, 80, MAX];
+const PWM_POWER_LEVEL: usize = POWER_LEVELS.len() - 1;
 
 impl<'a, P: Pin> LightControl<'a, P> {
     pub fn process_message(&self, action: Action) {
@@ -77,7 +77,7 @@ impl<'a, P: Pin> LightControl<'a, P> {
     }
 
     fn on_plus_clicked(&self) {
-        if self.led_level.get() > 0 && self.led_level.get() < PWM_MAX_LEVEL {
+        if self.led_level.get() > 0 && self.led_level.get() < PWM_POWER_LEVEL {
             self.increment_led_level(1);
             self.blink(GREEN, 5, DELAY_BLINK);
         } else {
@@ -97,11 +97,11 @@ impl<'a, P: Pin> LightControl<'a, P> {
     fn on_long_clicked(&self) {
         if self.led_level.get() == 0 {
             self.led_level.set(3);
-            self.led.set_pwm(PWM_STEPS[3]);
+            self.led.set(POWER_LEVELS[3]);
             self.blink(GREEN, 9, DELAY_BLINK / 2);
         } else {
             self.led_level.set(0);
-            self.led.set_pwm(PWM_STEPS[0]);
+            self.led.set(POWER_LEVELS[0]);
             self.blink(RED, 9, DELAY_BLINK / 2);
         }
     }
@@ -135,12 +135,12 @@ impl<'a, P: Pin> LightControl<'a, P> {
 
     fn change_led_level(&self, change: usize, inc: bool) {
         let current = self.led_level.get();
-        if inc && current == PWM_MAX_LEVEL { return; }
+        if inc && current == PWM_POWER_LEVEL { return; }
         if !inc && current == 0 { return; }
 
         let new_level = if inc { current + change } else { current - change };
         self.led_level.set(new_level);
-        self.led.set_pwm(PWM_STEPS[new_level]);
+        self.led.set(POWER_LEVELS[new_level]);
     }
 }
 

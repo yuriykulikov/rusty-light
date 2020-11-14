@@ -2,106 +2,106 @@
 mod tests {
     use std::cell::Cell;
 
-    use light_control::bsp::led::{Led, PWM_MAX};
+    use light_control::bsp::led::{Led, MAX};
     use light_control::bsp::pin::Pin;
     use light_control::bsp::rgb::Rgb;
-    use light_control::control::{DELAY_CHECK_BUTTONS, LightControl, PWM_STEPS};
+    use light_control::control::{DELAY_CHECK_BUTTONS, LightControl, POWER_LEVELS};
     use light_control::edt::EDT;
 
     #[test]
     fn button_clicks_do_nothing_when_off() {
-        with_bench(&|_advance_time, buttons, pwm| {
+        with_bench(&|_advance_time, buttons, power_level| {
             for _ in 0..10 {
                 buttons.click_plus();
-                assert_eq!(pwm.get(), 0);
+                assert_eq!(power_level.get(), 0);
             }
 
             for _ in 0..10 {
                 buttons.click_minus();
-                assert_eq!(pwm.get(), 0);
+                assert_eq!(power_level.get(), 0);
             }
         });
     }
 
     #[test]
     fn button_long_click_switches_on() {
-        with_bench(&|_advance_time, buttons, pwm| {
+        with_bench(&|_advance_time, buttons, power_level| {
             buttons.long_click_plus();
-            assert_eq!(pwm.get(), 9);
+            assert_eq!(power_level.get(), 40);
         });
     }
 
     #[test]
     fn button_clicks_change_brightness() {
-        with_bench(&|_advance_time, buttons, pwm| {
+        with_bench(&|_advance_time, buttons, power_level| {
             buttons.long_click_plus();
 
-            for _ in 0..5 {
+            for _ in 0..2 {
                 buttons.click_plus();
             }
-            assert_eq!(pwm.get(), 64);
+            assert_eq!(power_level.get(), 80);
 
-            for _ in 0..5 {
+            for _ in 0..2 {
                 buttons.click_minus();
             }
-            assert_eq!(pwm.get(), 9);
+            assert_eq!(power_level.get(), 40);
         });
     }
 
     #[test]
     fn brightness_can_be_changed_up_to_100() {
-        with_bench(&|_advance_time, buttons, pwm| {
+        with_bench(&|_advance_time, buttons, power_level| {
             buttons.long_click_plus();
             for _ in 0..10 {
                 buttons.click_plus();
             }
-            assert_eq!(pwm.get(), 100);
+            assert_eq!(power_level.get(), 100);
         });
     }
 
     #[test]
     fn brightness_can_be_changed_down_to_1() {
-        with_bench(&|_advance_time, buttons, pwm| {
+        with_bench(&|_advance_time, buttons, power_level| {
             buttons.long_click_plus();
             for _ in 0..10 {
                 buttons.click_minus();
             }
-            assert_eq!(pwm.get(), 1);
+            assert_eq!(power_level.get(), 7);
         });
     }
 
     #[test]
     fn clicks_can_be_spread_over_time() {
-        with_bench(&|advance_time, buttons, pwm| {
+        with_bench(&|advance_time, buttons, power_level| {
             buttons.long_click_plus();
 
-            for _ in 0..5 {
+            for _ in 0..2 {
                 buttons.click_plus();
                 advance_time(1000);
             }
 
-            assert_eq!(pwm.get(), 64);
+            assert_eq!(power_level.get(), 80);
 
-            for _ in 0..5 {
+            for _ in 0..3 {
                 buttons.click_minus();
                 advance_time(1000);
             }
 
-            assert_eq!(pwm.get(), 9);
+            assert_eq!(power_level.get(), 20);
         });
     }
 
     #[test]
     fn long_clicks_have_effect_when_released() {
-        with_bench(&|advance_time, buttons, pwm| {
+        with_bench(&|advance_time, buttons, power_level| {
             buttons.long_click_plus();
-            assert_eq!(pwm.get(), PWM_STEPS[3]);
-            for i in 4..8 {
+            assert_eq!(power_level.get(), POWER_LEVELS[3]);
+            for i in 4..6 {
                 buttons.press_plus();
                 advance_time(700);
                 buttons.release_plus();
                 advance_time(100);
-                assert_eq!(pwm.get(), PWM_STEPS[i]);
+                assert_eq!(power_level.get(), POWER_LEVELS[i]);
             }
         });
     }
@@ -109,8 +109,8 @@ mod tests {
     fn with_bench(block: &dyn Fn(&dyn Fn(u32), Buttons, &Cell<u32>)) {
         let plus_pin = Cell::new(false);
         let minus_pin = Cell::new(false);
-        let pwm = Cell::new(0);
-        let led = TestLed { pwm: &pwm };
+        let power_level = Cell::new(0);
+        let led = TestLed { power_output: &power_level };
         let rgb = TestRgb { rgb: Cell::new(0) };
         let edt = EDT::create();
         let light_control = LightControl {
@@ -126,21 +126,21 @@ mod tests {
         let advance_time = |time: u32| {
             edt.process_events(time, &|action| {
                 light_control.process_message(action);
-                render_flashlight_state(led.get_pwm(), rgb.get_rgb());
+                render_flashlight_state(led.get(), rgb.get_rgb());
             });
         };
 
         block(
             &advance_time,
             Buttons { plus_pin: &plus_pin, minus_pin: &minus_pin, advance_time: &advance_time },
-            &pwm,
+            &power_level,
         );
     }
 
-    fn render_flashlight_state(pwm: u32, rgb: u8) {
+    fn render_flashlight_state(power_level: u32, rgb: u8) {
         let mut led_str = String::new();
-        for _ in 0..pwm { led_str.push('*'); }
-        for _ in 0..(PWM_MAX - pwm) { led_str.push(' '); }
+        for _ in 0..power_level { led_str.push('*'); }
+        for _ in 0..(MAX - power_level) { led_str.push(' '); }
         println!("  [{}]  [{}]", led_str, rgb);
     }
 
@@ -157,22 +157,16 @@ mod tests {
 
     /// Led which resides in memory, for simulation or testing
     pub struct TestLed<'a> {
-        pub pwm: &'a Cell<u32>
+        pub power_output: &'a Cell<u32>
     }
 
     impl<'a> Led for TestLed<'a> {
-        fn set_pwm(&self, pwm: u32) {
-            self.pwm.set(pwm);
+        fn set(&self, power_level: u32) {
+            self.power_output.set(power_level);
         }
 
-        fn get_pwm(&self) -> u32 {
-            return self.pwm.get();
-        }
-
-        fn modify(&self, f: &dyn Fn(u32) -> u32) {
-            let prev = self.get_pwm();
-            let value = f(prev);
-            self.set_pwm(value)
+        fn get(&self) -> u32 {
+            return self.power_output.get();
         }
     }
 
