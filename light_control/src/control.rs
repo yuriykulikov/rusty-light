@@ -82,7 +82,10 @@ impl<'a, P: Pin> LightControl<'a, P> {
     }
 
     fn on_plus_clicked(&self) {
-        if self.led_level.get() > 0 && self.led_level.get() < PWM_POWER_LEVEL {
+        if self.led_level.get() == 0 {
+            self.set_led_level_with_animation(4, elastic_steps);
+            self.blink(GREEN, 9, DELAY_BLINK / 2);
+        } else if self.led_level.get() < PWM_POWER_LEVEL {
             self.increment_led_level(1);
             self.blink(GREEN, 5, DELAY_BLINK);
         } else {
@@ -91,7 +94,10 @@ impl<'a, P: Pin> LightControl<'a, P> {
     }
 
     fn on_minus_clicked(&self) {
-        if self.led_level.get() > 1 {
+        if self.led_level.get() == 0 {
+            self.set_led_level_with_animation(2, linear_sine_exp_steps);
+            self.blink(GREEN, 9, DELAY_BLINK / 2);
+        } else if self.led_level.get() > 1 {
             self.decrement_led_level(1);
             self.blink(RED, 5, DELAY_BLINK);
         } else {
@@ -101,8 +107,8 @@ impl<'a, P: Pin> LightControl<'a, P> {
 
     fn on_long_clicked(&self) {
         if self.led_level.get() == 0 {
-            self.set_led_level_with_animation(3, elastic_steps);
-            self.blink(GREEN, 9, DELAY_BLINK / 2);
+            self.set_led_level_with_animation(1, linear_steps);
+            self.blink(BLUE, 3, DELAY_BLINK / 2);
         } else {
             self.set_led_level_with_animation(0, linear_steps);
             self.blink(RED, 9, DELAY_BLINK / 2);
@@ -190,14 +196,22 @@ fn linear_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
 
 fn linear_sine_exp_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
     debug_assert_eq!(from, 0);
-    debug_assert_eq!(to, 40);
-    return [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 45, 44, 42, 40, 39, 38, 38, 39, 40];
+    debug_assert!(to == 20 || to == 40);
+    return if to == 40 {
+        [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 45, 44, 42, 40, 39, 38, 38, 39, 40]
+    } else {
+        [2, 4, 6, 8, 10, 12, 14, 16, 18, 21, 24, 25, 24, 22, 20, 19, 18, 18, 19, 20]
+    };
 }
 
 fn elastic_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
     debug_assert_eq!(from, 0);
-    debug_assert_eq!(to, 40);
-    return [7, 18, 29, 39, 48, 53, 55, 54, 52, 48, 44, 40, 38, 36, 35, 35, 36, 37, 38, 40];
+    debug_assert!(to == 40 || to == 60);
+    return if to == 40 {
+        [7, 18, 29, 39, 48, 53, 55, 54, 52, 48, 44, 40, 38, 36, 35, 35, 36, 37, 38, 40]
+    } else {
+        [11, 27, 44, 59, 71, 79, 82, 81, 78, 72, 66, 61, 56, 53, 52, 52, 54, 55, 58, 60]
+    };
 }
 
 #[cfg(test)]
