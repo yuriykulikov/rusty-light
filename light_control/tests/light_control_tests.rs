@@ -9,42 +9,43 @@ mod tests {
     use light_control::edt::EDT;
 
     #[test]
-    fn button_clicks_do_nothing_when_off() {
+    fn plus_button_clicks_switch_on() {
         with_bench(&|_advance_time, buttons, power_level| {
-            for _ in 0..10 {
-                buttons.click_plus();
-                assert_eq!(power_level.get(), 0);
-            }
-
-            for _ in 0..10 {
-                buttons.click_minus();
-                assert_eq!(power_level.get(), 0);
-            }
+            buttons.click_plus();
+            assert_eq!(power_level.get(), 60);
         });
     }
 
     #[test]
-    fn button_long_click_switches_on() {
+    fn minus_button_clicks_switch_on() {
+        with_bench(&|_advance_time, buttons, power_level| {
+            buttons.click_minus();
+            assert_eq!(power_level.get(), 20);
+        });
+    }
+
+    #[test]
+    fn button_long_click_switches_on_low_mode() {
         with_bench(&|_advance_time, buttons, power_level| {
             buttons.long_click_plus();
-            assert_eq!(power_level.get(), 40);
+            assert_eq!(power_level.get(), 7);
         });
     }
 
     #[test]
     fn button_clicks_change_brightness() {
         with_bench(&|_advance_time, buttons, power_level| {
-            buttons.long_click_plus();
+            buttons.click_minus();
 
             for _ in 0..2 {
                 buttons.click_plus();
             }
-            assert_eq!(power_level.get(), 80);
+            assert_eq!(power_level.get(), 60);
 
             for _ in 0..2 {
                 buttons.click_minus();
             }
-            assert_eq!(power_level.get(), 40);
+            assert_eq!(power_level.get(), 20);
         });
     }
 
@@ -73,9 +74,9 @@ mod tests {
     #[test]
     fn clicks_can_be_spread_over_time() {
         with_bench(&|advance_time, buttons, power_level| {
-            buttons.long_click_plus();
+            buttons.click_minus();
 
-            for _ in 0..2 {
+            for _ in 0..3 {
                 buttons.click_plus();
                 advance_time(1000);
             }
@@ -94,9 +95,9 @@ mod tests {
     #[test]
     fn long_clicks_have_effect_when_released() {
         with_bench(&|advance_time, buttons, power_level| {
-            buttons.long_click_plus();
-            assert_eq!(power_level.get(), POWER_LEVELS[3]);
-            for i in 4..6 {
+            buttons.click_minus();
+            assert_eq!(power_level.get(), POWER_LEVELS[2]);
+            for i in 3..6 {
                 buttons.press_plus();
                 advance_time(700);
                 buttons.release_plus();
