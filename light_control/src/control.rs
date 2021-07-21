@@ -1,10 +1,10 @@
 use std::cell::Cell;
 
+use crate::bsp::led::{Led, PWM_MAX};
+use crate::bsp::pin::Pin;
+use crate::bsp::rgb::{BLUE, GREEN, RED, Rgb};
 use crate::control::Action::CheckButtons;
-use crate::event_loop::EDT;
-use crate::led::{Led, PWM_MAX};
-use crate::pin::Pin;
-use crate::rgb::{BLUE, GREEN, RED, Rgb};
+use crate::edt::EDT;
 
 /// Control logic evaluates button states and changes the light intensity
 pub struct LightControl<'a, P: Pin> {
@@ -115,11 +115,11 @@ impl<'a, P: Pin> LightControl<'a, P> {
 mod tests {
     use std::cell::Cell;
 
+    use crate::bsp::led::{Led, PWM_MAX};
+    use crate::bsp::pin::Pin;
+    use crate::bsp::rgb::Rgb;
     use crate::control::{DELAY_CHECK_BUTTONS, LightControl, PWM_STEPS};
-    use crate::event_loop::EDT;
-    use crate::led::{Led, PWM_MAX};
-    use crate::pin::Pin;
-    use crate::rgb::{DummyRgb, Rgb};
+    use crate::edt::EDT;
 
     #[test]
     fn button_clicks_change_brightness() {
@@ -172,7 +172,7 @@ mod tests {
         let minus_pin = Cell::new(false);
         let pwm = Cell::new(0);
         let led = TestLed { pwm: &pwm };
-        let rgb = DummyRgb::create();
+        let rgb = TestRgb { rgb: Cell::new(0) };
         let edt = EDT::create();
         let light_control = LightControl {
             plus_pin: TestPin { is_down: &plus_pin },
@@ -261,6 +261,20 @@ mod tests {
             (self.advance_time)(DELAY_CHECK_BUTTONS);
             self.release_minus();
             (self.advance_time)(DELAY_CHECK_BUTTONS);
+        }
+    }
+
+    /// Led which resides in memory, for simulation or testing
+    pub struct TestRgb {
+        rgb: Cell<u8>
+    }
+
+    impl Rgb for TestRgb {
+        fn set_rgb(&self, rgb: u8) {
+            self.rgb.set(rgb);
+        }
+        fn get_rgb(&self) -> u8 {
+            return self.rgb.get();
         }
     }
 }

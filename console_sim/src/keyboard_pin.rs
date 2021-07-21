@@ -1,11 +1,7 @@
 extern crate keyboard_query;
 
 use keyboard_query::{DeviceQuery, DeviceState};
-
-/// A pin (of a button) which may be down (tied to the ground) or up (floating pin)
-pub trait Pin {
-    fn is_down(&self) -> bool;
-}
+use light_control::bsp::pin::Pin;
 
 pub struct KeyboardPin {
     device_state: DeviceState,
