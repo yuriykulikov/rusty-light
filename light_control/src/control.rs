@@ -3,7 +3,7 @@ use no_std_compat::cell::Cell;
 use crate::bsp::led::{Led, MAX};
 use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{BLUE, GREEN, RED, Rgb};
-use crate::control::Action::CheckButtons;
+use crate::control::Action::{CheckButtons, SetPwm};
 use crate::edt::EDT;
 
 /// Control logic evaluates button states and changes the light intensity
@@ -20,20 +20,25 @@ pub struct LightControl<'a, P: Pin> {
 pub enum Action {
     Blink { color: u8, blinks: u32 },
     CheckButtons { prev_plus: u32, prev_minus: u32 },
+    SetPwm { power_level: u32 },
 }
 
-pub const DELAY_CHECK_BUTTONS: u32 = 75;
+pub const DELAY_CHECK_BUTTONS: u32 = 50;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000 / DELAY_CHECK_BUTTONS;
 pub const DELAY_BLINK: u32 = 100;
 
 pub const POWER_LEVELS: &'static [u32] = &[0, 7, 20, 40, 60, 80, MAX];
 const PWM_POWER_LEVEL: usize = POWER_LEVELS.len() - 1;
+pub const ANIM_DURATION: u32 = 250;
+const ANIM_SIZE: usize = 20;
+const ANIM_STEP: u32 = ANIM_DURATION / ANIM_SIZE as u32;
 
 impl<'a, P: Pin> LightControl<'a, P> {
     pub fn process_message(&self, action: Action) {
         match action {
             Action::CheckButtons { prev_plus, prev_minus } => self.check_buttons(prev_plus, prev_minus),
             Action::Blink { color, blinks } => self.blink_led(color, blinks),
+            Action::SetPwm { power_level: goal } => self.set_power_level(goal),
         }
     }
 
@@ -96,12 +101,10 @@ impl<'a, P: Pin> LightControl<'a, P> {
 
     fn on_long_clicked(&self) {
         if self.led_level.get() == 0 {
-            self.led_level.set(3);
-            self.led.set(POWER_LEVELS[3]);
+            self.set_led_level_with_animation(3, elastic_steps);
             self.blink(GREEN, 9, DELAY_BLINK / 2);
         } else {
-            self.led_level.set(0);
-            self.led.set(POWER_LEVELS[0]);
+            self.set_led_level_with_animation(0, linear_steps);
             self.blink(RED, 9, DELAY_BLINK / 2);
         }
     }
@@ -139,9 +142,94 @@ impl<'a, P: Pin> LightControl<'a, P> {
         if !inc && current == 0 { return; }
 
         let new_level = if inc { current + change } else { current - change };
+
+        self.set_led_level_with_animation(new_level, linear_steps);
+    }
+
+    fn set_led_level_with_animation(&self, new_level: usize, animation: fn(u32, u32) -> [u32; ANIM_SIZE]) {
         self.led_level.set(new_level);
-        self.led.set(POWER_LEVELS[new_level]);
+
+        // animation
+        self.remove_set_power_level_messages();
+
+        let current_power_level = self.led.get();
+        let goal = POWER_LEVELS[new_level];
+
+        let steps = animation(current_power_level, goal);
+        for i in 0..ANIM_SIZE {
+            self.edt.schedule(ANIM_STEP * i as u32, SetPwm { power_level: steps[i] });
+        }
+    }
+
+    fn remove_set_power_level_messages(&self) {
+        self.edt.remove(|msg| {
+            match msg {
+                Action::SetPwm { power_level: _ } => true,
+                _ => false
+            }
+        });
+    }
+
+    fn set_power_level(&self, power_level: u32) {
+        self.led.set(power_level);
     }
 }
+
+fn linear_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
+    let mut x = [1234; ANIM_SIZE];
+
+    let diff = to as i32 - from as i32;
+
+    for i in 0..ANIM_SIZE as i32 {
+        let next_value = from as i32 + (diff * (i + 1) / ANIM_SIZE as i32);
+        debug_assert!(next_value >= 0);
+        x[i as usize] = next_value as u32;
+    }
+    return x;
+}
+
+fn linear_sine_exp_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
+    debug_assert_eq!(from, 0);
+    debug_assert_eq!(to, 40);
+    return [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 45, 44, 42, 40, 39, 38, 38, 39, 40];
+}
+
+fn elastic_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
+    debug_assert_eq!(from, 0);
+    debug_assert_eq!(to, 40);
+    return [7, 18, 29, 39, 48, 53, 55, 54, 52, 48, 44, 40, 38, 36, 35, 35, 36, 37, 38, 40];
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::control::linear_steps;
+
+    #[test]
+    fn linear_step_up() {
+        let steps = linear_steps(0, 20);
+        assert_eq!(steps, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    }
+
+    #[test]
+    fn linear_step_up_big() {
+        let steps = linear_steps(0, 40);
+        assert_eq!(steps, [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40]);
+    }
+
+
+    #[test]
+    fn linear_step_down() {
+        let steps = linear_steps(60, 80);
+        assert_eq!(steps, [61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]);
+    }
+
+    #[test]
+    fn linear_step_down_big() {
+        let steps = linear_steps(80, 0);
+        assert_eq!(steps, [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8, 4, 0]);
+    }
+}
+
+
 
 
