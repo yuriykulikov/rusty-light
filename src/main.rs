@@ -1,4 +1,6 @@
 use std::io::stdout;
+use std::thread::sleep;
+use std::time::Duration;
 
 use crossterm::{
     ExecutableCommand,
@@ -12,7 +14,7 @@ use crate::control::LightControl;
 use crate::event_loop::EDT;
 use crate::led::{DummyLed, Led};
 use crate::pin::{KeyboardPin, Pin};
-use crate::rgb::{DummyRgb, Rgb, RED, GREEN, BLUE};
+use crate::rgb::{BLUE, DummyRgb, GREEN, RED, Rgb};
 
 mod pin;
 mod led;
@@ -31,7 +33,10 @@ fn event_loop() {
     let led = DummyLed::create(0);
     let rgb = DummyRgb::create();
 
-    let edt = EDT::create();
+    let edt = EDT::create(|time| {
+        sleep(Duration::from_millis(time as u64));
+    });
+
     let light_control = LightControl {
         plus_pin,
         minus_pin,
@@ -43,18 +48,13 @@ fn event_loop() {
 
     let (x, y) = position().unwrap();
 
-    loop {
-        if esc_pin.is_down() {
-            break;
-        }
-
-        match edt.poll() {
-            Some(msg) => light_control.process_message(msg.payload),
-            None => break,
-        }
-
+    edt.process_events(&|action| {
+        light_control.process_message(action);
         render_flashlight_state(x, y, led.get_pwm(), rgb.get_rgb()).unwrap();
-    }
+        if esc_pin.is_down() {
+            edt.exit();
+        }
+    });
 
     println!("Finished!");
 }

@@ -69,7 +69,7 @@ impl<'a, P: Pin> LightControl<'a, P> {
     fn remove_blinks(&self) {
         self.edt.remove(|action| {
             match action {
-                Action::Blink { color, blinks } => true,
+                Action::Blink { color: _, blinks: _ } => true,
                 _ => false
             }
         });
