@@ -23,9 +23,11 @@ pub enum Action {
 }
 
 pub const DELAY_CHECK_BUTTONS: u32 = 75;
-pub const DELAY_BLINK: u32 = 250;
+pub const LONG_CLICK_THRESHOLD: u32 = 1000 / DELAY_CHECK_BUTTONS;
+pub const DELAY_BLINK: u32 = 100;
 
 pub const PWM_STEPS: &'static [u32] = &[0, 1, 4, 9, 16, 25, 36, 49, 64, 81, PWM_MAX];
+const PWM_MAX_LEVEL: usize = PWM_STEPS.len() - 1;
 
 impl<'a, P: Pin> LightControl<'a, P> {
     pub fn process_message(&self, action: Action) {
@@ -45,18 +47,29 @@ impl<'a, P: Pin> LightControl<'a, P> {
 
     pub fn check_buttons(&self, prev_plus: u32, prev_minus: u32) {
         if self.plus_pin.is_down() {
-            self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons { prev_plus: prev_plus + 1, prev_minus });
-        } else if self.minus_pin.is_down() {
-            self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons { prev_plus, prev_minus: prev_minus + 1 });
+            if prev_plus == LONG_CLICK_THRESHOLD {
+                self.on_long_clicked();
+            }
         } else {
-            if prev_plus > 0 {
+            if (1..LONG_CLICK_THRESHOLD).contains(&prev_plus) {
                 self.on_plus_clicked();
             }
-            if prev_minus > 0 {
-                self.on_minus_clicked()
-            }
-            self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons { prev_plus: 0, prev_minus: 0 });
         }
+
+        if self.minus_pin.is_down() {
+            if prev_minus == LONG_CLICK_THRESHOLD {
+                self.on_long_clicked();
+            }
+        } else {
+            if (1..LONG_CLICK_THRESHOLD).contains(&prev_minus) {
+                self.on_minus_clicked();
+            }
+        }
+
+        let next_plus = if self.plus_pin.is_down() { prev_plus + 1 } else { 0 };
+        let next_minus = if self.minus_pin.is_down() { prev_minus + 1 } else { 0 };
+
+        self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons { prev_plus: next_plus, prev_minus: next_minus });
     }
 
     pub fn start(&self) {
@@ -64,23 +77,32 @@ impl<'a, P: Pin> LightControl<'a, P> {
     }
 
     fn on_plus_clicked(&self) {
-        self.increment_led_level(1);
-        self.rgb.set_rgb(GREEN);
-        self.remove_blinks();
-        self.edt.schedule(DELAY_BLINK, Action::Blink { color: GREEN, blinks: 5 });
+        if self.led_level.get() > 0 && self.led_level.get() < PWM_MAX_LEVEL {
+            self.increment_led_level(1);
+            self.blink(GREEN, 5, DELAY_BLINK);
+        } else {
+            self.indicate_nop();
+        }
     }
 
     fn on_minus_clicked(&self) {
-        self.decrement_led_level(1);
-
-        if self.led.get_pwm() == 0 {
-            self.rgb.set_rgb(BLUE);
-            self.remove_blinks();
-            self.edt.schedule(1000, Action::Blink { color: BLUE, blinks: 1 });
+        if self.led_level.get() > 1 {
+            self.decrement_led_level(1);
+            self.blink(RED, 5, DELAY_BLINK);
         } else {
-            self.rgb.set_rgb(RED);
-            self.remove_blinks();
-            self.edt.schedule(DELAY_BLINK, Action::Blink { color: RED, blinks: 5 });
+            self.indicate_nop();
+        }
+    }
+
+    fn on_long_clicked(&self) {
+        if self.led_level.get() == 0 {
+            self.led_level.set(3);
+            self.led.set_pwm(PWM_STEPS[3]);
+            self.blink(GREEN, 9, DELAY_BLINK / 2);
+        } else {
+            self.led_level.set(0);
+            self.led.set_pwm(PWM_STEPS[0]);
+            self.blink(RED, 9, DELAY_BLINK / 2);
         }
     }
 
@@ -93,16 +115,27 @@ impl<'a, P: Pin> LightControl<'a, P> {
         });
     }
 
+    fn blink(&self, color: u8, times: u32, period: u32) {
+        self.rgb.set_rgb(color);
+        self.remove_blinks();
+        self.edt.schedule(period, Action::Blink { color, blinks: times });
+    }
+
+    fn indicate_nop(&self) {
+        self.blink(BLUE, 1, 500);
+    }
+
     fn increment_led_level(&self, inc: usize) {
         self.change_led_level(inc, true);
     }
+
     fn decrement_led_level(&self, dec: usize) {
         self.change_led_level(dec, false);
     }
+
     fn change_led_level(&self, change: usize, inc: bool) {
-        let max_level = PWM_STEPS.len() - 1;
         let current = self.led_level.get();
-        if inc && current == max_level { return; }
+        if inc && current == PWM_MAX_LEVEL { return; }
         if !inc && current == 0 { return; }
 
         let new_level = if inc { current + change } else { current - change };

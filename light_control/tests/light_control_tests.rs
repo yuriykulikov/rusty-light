@@ -2,51 +2,103 @@
 mod tests {
     use std::cell::Cell;
 
-    use light_control::control::{LightControl, PWM_STEPS, DELAY_CHECK_BUTTONS};
-    use light_control::edt::EDT;
-    use light_control::bsp::led::{PWM_MAX, Led};
+    use light_control::bsp::led::{Led, PWM_MAX};
     use light_control::bsp::pin::Pin;
     use light_control::bsp::rgb::Rgb;
+    use light_control::control::{DELAY_CHECK_BUTTONS, LightControl, PWM_STEPS};
+    use light_control::edt::EDT;
+
+    #[test]
+    fn button_clicks_do_nothing_when_off() {
+        with_bench(&|_advance_time, buttons, pwm| {
+            for _ in 0..10 {
+                buttons.click_plus();
+                assert_eq!(pwm.get(), 0);
+            }
+
+            for _ in 0..10 {
+                buttons.click_minus();
+                assert_eq!(pwm.get(), 0);
+            }
+        });
+    }
+
+    #[test]
+    fn button_long_click_switches_on() {
+        with_bench(&|_advance_time, buttons, pwm| {
+            buttons.long_click_plus();
+            assert_eq!(pwm.get(), 9);
+        });
+    }
 
     #[test]
     fn button_clicks_change_brightness() {
         with_bench(&|_advance_time, buttons, pwm| {
+            buttons.long_click_plus();
+
+            for _ in 0..5 {
+                buttons.click_plus();
+            }
+            assert_eq!(pwm.get(), 64);
+
+            for _ in 0..5 {
+                buttons.click_minus();
+            }
+            assert_eq!(pwm.get(), 9);
+        });
+    }
+
+    #[test]
+    fn brightness_can_be_changed_up_to_100() {
+        with_bench(&|_advance_time, buttons, pwm| {
+            buttons.long_click_plus();
             for _ in 0..10 {
                 buttons.click_plus();
             }
             assert_eq!(pwm.get(), 100);
+        });
+    }
 
+    #[test]
+    fn brightness_can_be_changed_down_to_1() {
+        with_bench(&|_advance_time, buttons, pwm| {
+            buttons.long_click_plus();
             for _ in 0..10 {
                 buttons.click_minus();
             }
-            assert_eq!(pwm.get(), 0);
+            assert_eq!(pwm.get(), 1);
         });
     }
 
     #[test]
     fn clicks_can_be_spread_over_time() {
         with_bench(&|advance_time, buttons, pwm| {
+            buttons.long_click_plus();
+
             for _ in 0..5 {
                 buttons.click_plus();
                 advance_time(1000);
             }
-            assert_eq!(pwm.get(), 25);
+
+            assert_eq!(pwm.get(), 64);
 
             for _ in 0..5 {
                 buttons.click_minus();
                 advance_time(1000);
             }
-            assert_eq!(pwm.get(), 0);
+
+            assert_eq!(pwm.get(), 9);
         });
     }
 
     #[test]
     fn long_clicks_have_effect_when_released() {
         with_bench(&|advance_time, buttons, pwm| {
-            assert_eq!(pwm.get(), PWM_STEPS[0]);
-            for i in 1..5 {
+            buttons.long_click_plus();
+            assert_eq!(pwm.get(), PWM_STEPS[3]);
+            for i in 4..8 {
                 buttons.press_plus();
-                advance_time(10000);
+                advance_time(700);
                 buttons.release_plus();
                 advance_time(100);
                 assert_eq!(pwm.get(), PWM_STEPS[i]);
@@ -147,6 +199,13 @@ mod tests {
             self.press_minus();
             (self.advance_time)(DELAY_CHECK_BUTTONS);
             self.release_minus();
+            (self.advance_time)(DELAY_CHECK_BUTTONS);
+        }
+        fn long_click_plus(&self) {
+            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            self.press_plus();
+            (self.advance_time)(1500);
+            self.release_plus();
             (self.advance_time)(DELAY_CHECK_BUTTONS);
         }
     }
