@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use no_std_compat::cell::Cell;
 
 use crate::bsp::led::{Led, PWM_MAX};
 use crate::bsp::pin::Pin;
@@ -16,6 +16,7 @@ pub struct LightControl<'a, P: Pin> {
     pub led_level: Cell<usize>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Copy)]
 pub enum Action {
     Blink { color: u8, blinks: u32 },
     CheckButtons { prev_plus: u32, prev_minus: u32 },
