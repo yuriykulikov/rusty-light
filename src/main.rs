@@ -33,9 +33,7 @@ fn event_loop() {
     let led = DummyLed::create(0);
     let rgb = DummyRgb::create();
 
-    let edt = EDT::create(|time| {
-        sleep(Duration::from_millis(time as u64));
-    });
+    let edt = EDT::create();
 
     let light_control = LightControl {
         plus_pin,
@@ -48,13 +46,20 @@ fn event_loop() {
 
     let (x, y) = position().unwrap();
 
-    edt.process_events(&|action| {
+    let handler = &|action| {
         light_control.process_message(action);
         render_flashlight_state(x, y, led.get_pwm(), rgb.get_rgb()).unwrap();
         if esc_pin.is_down() {
             edt.exit();
         }
-    });
+    };
+
+    let mut to_sleep = 0;
+    loop {
+        to_sleep = edt.process_events(to_sleep, handler);
+        if to_sleep == 0 { break; }
+        sleep(Duration::from_millis(to_sleep as u64));
+    }
 
     println!("Finished!");
 }
