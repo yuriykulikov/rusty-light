@@ -1,2 +1,2 @@
 [workspace]
-members = ["console_sim", "light_control"]
+members = ["console_sim", "light_control", "blackboard"]
