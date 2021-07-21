@@ -1,4 +1,4 @@
-extern crate keyboard_query;
+use keyboard_query;
 
 use keyboard_query::{DeviceQuery, DeviceState};
 use light_control::bsp::pin::Pin;
