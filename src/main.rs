@@ -12,7 +12,7 @@ use crossterm::terminal::{Clear, ClearType};
 
 use crate::control::LightControl;
 use crate::event_loop::EDT;
-use crate::led::{DummyLed, Led};
+use crate::led::{DummyLed, Led, PWM_MAX};
 use crate::pin::{KeyboardPin, Pin};
 use crate::rgb::{BLUE, DummyRgb, GREEN, RED, Rgb};
 
@@ -59,14 +59,14 @@ fn event_loop() {
     println!("Finished!");
 }
 
-fn render_flashlight_state(x: u16, y: u16, pwm: u8, rgb: u8) -> Result<()> {
+fn render_flashlight_state(x: u16, y: u16, pwm: u32, rgb: u8) -> Result<()> {
     let red_led_color = if rgb & RED > 0 { Color::Red } else { Color::Black };
     let red_green_color = if rgb & GREEN > 0 { Color::Green } else { Color::Black };
     let red_blue_color = if rgb & BLUE > 0 { Color::Blue } else { Color::Black };
 
     let mut led_str = String::new();
     for _ in 0..pwm { led_str.push('*'); }
-    for _ in 0..(32 - pwm) { led_str.push(' '); }
+    for _ in 0..(PWM_MAX - pwm) { led_str.push(' '); }
 
     stdout()
         .execute(Clear(ClearType::FromCursorDown))?
