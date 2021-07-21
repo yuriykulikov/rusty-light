@@ -1,0 +1,8 @@
+Device STM32G031K8
+si SWD
+speed 4000
+r
+h
+loadfile blackboard.hex
+r
+qc
