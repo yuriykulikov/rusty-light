@@ -17,7 +17,7 @@ use rt::{entry, ExceptionFrame, exception};
 
 #[entry]
 fn main() -> ! {
-    let mut output = jlink_rtt::Output::new();
+    let mut output = jlink_rtt::NonBlockingOutput::new();
     let _ = writeln!(output, "Hello {}", 42);
 
     // https://github.com/stm32-rs/stm32g0xx-hal
