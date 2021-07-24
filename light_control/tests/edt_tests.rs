@@ -47,7 +47,7 @@ mod tests {
         let events: RefCell<Vec<u32>> = RefCell::new(vec![]);
 
         // when time advances 25 milliseconds
-        edt.process_events(25, &|payload| {
+        edt.advance_time_by(25, &|payload| {
             events.borrow_mut().push(payload);
         });
 
@@ -80,7 +80,7 @@ mod tests {
         let events: RefCell<Vec<u32>> = RefCell::new(vec![]);
 
         // when time advances 25 milliseconds
-        edt.process_events(25, &|payload| {
+        edt.advance_time_by(25, &|payload| {
             events.borrow_mut().push(payload);
         });
 
