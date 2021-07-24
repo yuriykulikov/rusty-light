@@ -7,9 +7,9 @@ use crate::control::Action::{CheckButtons, SetPwm};
 use crate::edt::EDT;
 
 /// Control logic evaluates button states and changes the light intensity
-pub struct LightControl<'a, P: Pin> {
+pub struct LightControl<'a, P: Pin, M: Pin> {
     pub plus_pin: P,
-    pub minus_pin: P,
+    pub minus_pin: M,
     pub led: &'a dyn Led,
     pub rgb: &'a dyn Rgb,
     pub edt: &'a EDT<Action>,
@@ -33,10 +33,10 @@ pub const ANIM_DURATION: u32 = 250;
 const ANIM_SIZE: usize = 20;
 const ANIM_STEP: u32 = ANIM_DURATION / ANIM_SIZE as u32;
 
-impl<'a, P: Pin> LightControl<'a, P> {
+impl<'a, P: Pin, M: Pin> LightControl<'a, P, M> {
     pub fn new(
         plus_pin: P,
-        minus_pin: P,
+        minus_pin: M,
         led: &'a dyn Led,
         rgb: &'a dyn Rgb,
         edt: &'a EDT<Action>,
@@ -48,7 +48,7 @@ impl<'a, P: Pin> LightControl<'a, P> {
             rgb,
             edt,
             led_level: Cell::new(0),
-        }
+        };
     }
     pub fn process_message(&self, action: Action) {
         match action {
