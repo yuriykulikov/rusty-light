@@ -25,6 +25,12 @@ impl<T: Copy> EDT<T> {
     }
 }
 
+pub enum Event<T> {
+    Execute { msg: T },
+    Wait { ms: u32 },
+    Halt,
+}
+
 impl<T: Copy> EDT<T> {
     pub fn now(&self) -> u32 { self.now.get() }
 
@@ -33,37 +39,52 @@ impl<T: Copy> EDT<T> {
         self.queue.replace([None; SIZE]);
     }
 
-    /// Processes all events which are due within the advance_time_by from now
-    /// returns the time until the next event, which can be used to sleep
-    /// TODO replace with mut Fn like remove in EDT
-    pub fn process_events(&self, advance_time_by: u32, handler: &dyn Fn(T)) -> u32 {
-        let target_time = self.now.get() + advance_time_by;
+    pub fn poll(&self) -> Event<T> {
+        if self.queue.borrow().iter().all(|msg| { msg.is_none() }) {
+            return Event::Halt;
+        }
+
+        let head = self.peek_head();
+        let to_wait = head.when - self.now.get();
+
+        return if to_wait > 0 {
+            // processed all messages due before target_time
+            self.now.set(head.when);
+            Event::Wait { ms: to_wait }
+        } else {
+            let next_when = head.when;
+
+            // WTF is that
+            self.queue.borrow_mut()
+                .iter_mut()
+                .filter(|it| {
+                    it.is_some()
+                        && it.unwrap().when == head.when
+                        && it.unwrap().order == head.order
+                })
+                .take(1)
+                .for_each(|opt| { *opt = None; });
+
+            self.now.set(next_when);
+            Event::Execute { msg: head.payload }
+        };
+    }
+
+    /// Advances the time by the given value and feeds messages to the handler
+    pub fn advance_time_by(&self, time: u32,  handler: &dyn Fn(T)) {
+        let target = self.now.get() + time;
+        let mut elapsed: u32 = 0;
         loop {
-            if self.queue.borrow().iter().all(|msg| { msg.is_none() }) {
-                return 0;
-            }
-
-            let head = self.peek_head();
-
-            if head.when > target_time {
-                // processed all messages due before target_time
-                self.now.set(target_time);
-                return head.when - target_time;
-            } else {
-                let next_when = head.when;
-
-                self.queue.borrow_mut()
-                    .iter_mut()
-                    .filter(|it| {
-                        it.is_some()
-                            && it.unwrap().when == head.when
-                            && it.unwrap().order == head.order
-                    })
-                    .take(1)
-                    .for_each(|opt| { *opt = None; });
-
-                self.now.set(next_when);
-                handler(head.payload);
+            match self.poll() {
+                Event::Execute { msg } => { handler(msg); }
+                Event::Wait { ms } => {
+                    elapsed = elapsed + ms;
+                    if elapsed > time {
+                        self.now.set(target);
+                        break;
+                    }
+                }
+                Event::Halt => { break; }
             }
         }
     }
@@ -97,14 +118,6 @@ impl<T: Copy> EDT<T> {
             .for_each(|opt| {
                 *opt = Some(Msg { when, order, payload });
             })
-
-        // I cannot comprehend loops anymore I guess
-        // for opt in self.queue.borrow_mut().iter_mut() {
-        //    if opt.is_none() {
-        //        *opt = Some(Msg { when, order, payload });
-        //        break;
-        //    }
-        // }
     }
 
     pub fn remove<F>(&self, mut predicate: F) where F: FnMut(&T) -> bool {

@@ -34,6 +34,22 @@ const ANIM_SIZE: usize = 20;
 const ANIM_STEP: u32 = ANIM_DURATION / ANIM_SIZE as u32;
 
 impl<'a, P: Pin> LightControl<'a, P> {
+    pub fn new(
+        plus_pin: P,
+        minus_pin: P,
+        led: &'a dyn Led,
+        rgb: &'a dyn Rgb,
+        edt: &'a EDT<Action>,
+    ) -> Self {
+        return LightControl {
+            plus_pin,
+            minus_pin,
+            led,
+            rgb,
+            edt,
+            led_level: Cell::new(0),
+        }
+    }
     pub fn process_message(&self, action: Action) {
         match action {
             Action::CheckButtons { prev_plus, prev_minus } => self.check_buttons(prev_plus, prev_minus),

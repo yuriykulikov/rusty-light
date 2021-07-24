@@ -125,8 +125,8 @@ mod tests {
         light_control.start();
 
         let advance_time = |time: u32| {
-            edt.process_events(time, &|action| {
-                light_control.process_message(action);
+            edt.advance_time_by(time, &|msg| {
+                light_control.process_message(msg);
                 render_flashlight_state(led.get(), rgb.get_rgb());
             });
         };
@@ -158,7 +158,7 @@ mod tests {
 
     /// Led which resides in memory, for simulation or testing
     pub struct TestLed<'a> {
-        pub power_output: &'a Cell<u32>
+        pub power_output: &'a Cell<u32>,
     }
 
     impl<'a> Led for TestLed<'a> {
@@ -210,7 +210,7 @@ mod tests {
 
     /// Led which resides in memory, for simulation or testing
     pub struct TestRgb {
-        rgb: Cell<u8>
+        rgb: Cell<u8>,
     }
 
     impl Rgb for TestRgb {
