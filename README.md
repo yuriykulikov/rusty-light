@@ -20,9 +20,23 @@ and, occasionally, a nice bike trip.
 ## Building and running
 ### On the blackboard
 See [Blackboard README.md](blackboard/README.md)
-`cargo build --manifest-path=blackboard/Cargo.toml --target=thumbv6m-none-eabi`
-`cargo objcopy --target=thumbv6m-none-eabi --bin blackboard -- -O ihex blackboard.hex`
-`/usr/bin/JLinkExe -CommandFile command_file.jlink`
+
+Prerequisites:
+[JLink](https://www.segger.com/downloads/jlink/)
+
+```
+rustup target add thumbv6m-none-eabi
+cargo install cargo-binutils
+rustup component add llvm-tools-preview
+```
+
+Build and flash:
+
+```
+cargo build --manifest-path=blackboard/Cargo.toml --target=thumbv6m-none-eabi
+cargo objcopy --target=thumbv6m-none-eabi --bin blackboard -- -O ihex blackboard.hex
+/usr/bin/JLinkExe -CommandFile command_file.jlink
+```
 
 or simply `./flash.sh`
 ### Console
