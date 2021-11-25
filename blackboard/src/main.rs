@@ -119,7 +119,7 @@ impl PwmLed {
 impl Led for PwmLed {
     fn set(&self, pwm: u32) {
         self.state.set(pwm);
-        self.pwm_ch.borrow_mut().set_duty(self.duties[100 - pwm as usize]);
+        self.pwm_ch.borrow_mut().set_duty(self.duties[pwm as usize]);
     }
 
     fn get(&self) -> u32 {
