@@ -58,6 +58,8 @@ fn main() -> ! {
     );
 
     light_control.start();
+    light_control.jump_start();
+
 
     loop {
         match edt.poll() {

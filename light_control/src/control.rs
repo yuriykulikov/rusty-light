@@ -50,6 +50,11 @@ impl<'a, P: Pin, M: Pin> LightControl<'a, P, M> {
             led_level: Cell::new(0),
         };
     }
+
+    pub fn jump_start(&self) {
+        self.set_led_level_with_animation(4, elastic_steps);
+    }
+
     pub fn process_message(&self, action: Action) {
         match action {
             Action::CheckButtons { prev_plus, prev_minus } => self.check_buttons(prev_plus, prev_minus),
@@ -192,7 +197,7 @@ impl<'a, P: Pin, M: Pin> LightControl<'a, P, M> {
         });
     }
 
-    fn set_power_level(&self, power_level: u32) {
+    pub fn set_power_level(&self, power_level: u32) {
         self.led.set(power_level);
     }
 }
