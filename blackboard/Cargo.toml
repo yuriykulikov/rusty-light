@@ -17,7 +17,7 @@ jlink_rtt = {git = "https://github.com/wez/jlink_rtt"}
 light_control = { path = "../light_control" }
 
 [dependencies.stm32g0xx-hal]
-version = "^0.0.9"
+version = "0.1.2"
 features = ["stm32g031", "rt"]
 
 [profile.release]
