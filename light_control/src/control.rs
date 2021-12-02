@@ -33,7 +33,7 @@ pub const DELAY_BLINK: u32 = 100;
 
 pub const POWER_LEVELS: &'static [u32] = &[0, 7, 20, 40, 60, 80, MAX];
 const PWM_POWER_LEVEL: usize = POWER_LEVELS.len() - 1;
-pub const ANIM_DURATION: u32 = 250;
+pub const ANIM_DURATION: u32 = 500;
 const ANIM_SIZE: usize = 20;
 const ANIM_STEP: u32 = ANIM_DURATION / ANIM_SIZE as u32;
 
@@ -59,7 +59,7 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
     }
 
     pub fn jump_start(&self) {
-        self.set_led_level_with_animation(4, elastic_steps);
+        self.set_led_level_with_animation(3, linear_steps);
     }
 
     pub fn process_message(&self, action: Action) {
@@ -113,7 +113,7 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
 
     fn on_plus_clicked(&self) {
         if self.led_level.get() == 0 {
-            self.set_led_level_with_animation(4, elastic_steps);
+            self.set_led_level_with_animation(4, linear_steps);
             self.blink(GREEN, 9, DELAY_BLINK / 2);
         } else if self.led_level.get() < PWM_POWER_LEVEL {
             self.increment_led_level(1);
@@ -125,7 +125,7 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
 
     fn on_minus_clicked(&self) {
         if self.led_level.get() == 0 {
-            self.set_led_level_with_animation(2, linear_sine_exp_steps);
+            self.set_led_level_with_animation(2, linear_steps);
             self.blink(GREEN, 9, DELAY_BLINK / 2);
         } else if self.led_level.get() > 1 {
             self.decrement_led_level(1);
@@ -248,26 +248,6 @@ fn linear_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
         x[i as usize] = next_value as u32;
     }
     return x;
-}
-
-fn linear_sine_exp_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
-    debug_assert_eq!(from, 0);
-    debug_assert!(to == 20 || to == 40);
-    return if to == 40 {
-        [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 45, 44, 42, 40, 39, 38, 38, 39, 40]
-    } else {
-        [2, 4, 6, 8, 10, 12, 14, 16, 18, 21, 24, 25, 24, 22, 20, 19, 18, 18, 19, 20]
-    };
-}
-
-fn elastic_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
-    debug_assert_eq!(from, 0);
-    debug_assert!(to == 40 || to == 60);
-    return if to == 40 {
-        [7, 18, 29, 39, 48, 53, 55, 54, 52, 48, 44, 40, 38, 36, 35, 35, 36, 37, 38, 40]
-    } else {
-        [11, 27, 44, 59, 71, 79, 82, 81, 78, 72, 66, 61, 56, 53, 52, 52, 54, 55, 58, 60]
-    };
 }
 
 #[cfg(test)]
