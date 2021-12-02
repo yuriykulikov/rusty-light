@@ -31,6 +31,7 @@ use light_control::bsp::pin::Pin;
 use light_control::bsp::rgb::Rgb;
 use light_control::control::LightControl;
 use light_control::edt::{EDT, Event};
+use light_control::perceived_light_math::fill_pwm_duty_cycle_values;
 
 #[entry]
 fn main() -> ! {
@@ -101,7 +102,7 @@ fn main() -> ! {
 
 #[exception]
 fn HardFault(ef: &ExceptionFrame) -> ! {
-    let mut output = jlink_rtt::Output::new();
+    let mut output = jlink_rtt::NonBlockingOutput::new();
     writeln!(output, "Hard fault {:#?}", ef).ok();
     panic!("Hard fault {:#?}", ef);
 }
@@ -115,6 +116,7 @@ struct PwmLed {
 impl PwmLed {
     fn create(pwm_ch: PwmPin<TIM1, Channel2>) -> Self {
         let max = pwm_ch.get_max_duty();
+        let min_visible_pwm_duty_cycle = 86;
 
         let mut led = PwmLed {
             duties: [0; 101],
@@ -122,15 +124,13 @@ impl PwmLed {
             state: Cell::new(0),
         };
 
-        for i in 0..=100 {
-            let duh = i as u32;
-            let m = max as u32;
-            let duty = if i < 8 { m * duh / 903 } else { m * (duh + 16) / 116 * (duh + 16) / 116 * (duh + 16) / 116 };
-            led.duties[i] = duty as u16;
-        }
-
-        led.pwm_ch.borrow_mut().set_duty(max);
+        led.pwm_ch.borrow_mut().set_duty(0);
         led.pwm_ch.borrow_mut().enable();
+
+        let mut output = jlink_rtt::Output::new();
+        writeln!(output, "Calculating, max is {}", max);
+
+        fill_pwm_duty_cycle_values(&mut led.duties, min_visible_pwm_duty_cycle, max);
 
         return led;
     }
@@ -139,7 +139,10 @@ impl PwmLed {
 impl Led for PwmLed {
     fn set(&self, pwm: u32) {
         self.state.set(pwm);
-        self.pwm_ch.borrow_mut().set_duty(self.duties[pwm as usize]);
+        let duty_cycle = self.duties[pwm as usize];
+        self.pwm_ch.borrow_mut().set_duty(duty_cycle);
+        let mut output = jlink_rtt::NonBlockingOutput::new();
+        writeln!(output, "{}% -> {}", pwm, duty_cycle);
     }
 
     fn get(&self) -> u32 {
