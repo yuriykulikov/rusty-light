@@ -36,12 +36,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (esc_pin, minus_pin, plus_pin) = keys();
     let led = DummyLed::create(0);
     let rgb = DummyRgb::create();
+    let joystick = DummyJoystick {};
 
     let edt = EDT::create();
 
     let light_control = LightControl::new(
         plus_pin,
         minus_pin,
+        joystick,
         &led,
         &rgb,
         &edt,

@@ -1,6 +1,7 @@
 use keyboard_query;
-
 use keyboard_query::{DeviceQuery, DeviceState};
+
+use light_control::bsp::joystick::Joystick;
 use light_control::bsp::pin::Pin;
 
 pub struct KeyboardPin {
@@ -21,5 +22,13 @@ impl Pin for KeyboardPin {
     fn is_down(&self) -> bool {
         let keys = &self.device_state.get_keys();
         return keys.contains(&self.key_code);
+    }
+}
+
+struct DummyJoystick {}
+
+impl Joystick for DummyJoystick {
+    fn read(&self) -> (i32, i32) {
+        (0, 0)
     }
 }

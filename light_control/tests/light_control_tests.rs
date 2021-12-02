@@ -7,6 +7,7 @@ mod tests {
     use light_control::bsp::rgb::Rgb;
     use light_control::control::{ANIM_DURATION, DELAY_CHECK_BUTTONS, LightControl, POWER_LEVELS};
     use light_control::edt::EDT;
+    use light_control::bsp::joystick::Joystick;
 
     #[test]
     fn plus_button_clicks_switch_on() {
@@ -117,10 +118,12 @@ mod tests {
         let light_control = LightControl {
             plus_pin: TestPin { is_down: &plus_pin },
             minus_pin: TestPin { is_down: &minus_pin },
+            joystick: TestJoystick {},
             led: &led,
             edt: &edt,
             rgb: &rgb,
             led_level: Cell::new(0),
+            furthest_stick_position: Cell::new((0, 0)),
         };
         light_control.start();
 
@@ -219,6 +222,14 @@ mod tests {
         }
         fn get_rgb(&self) -> u8 {
             return self.rgb.get();
+        }
+    }
+
+    struct TestJoystick {}
+
+    impl Joystick for TestJoystick {
+        fn read(&self) -> (i32, i32) {
+            (0, 0)
         }
     }
 }

@@ -14,8 +14,10 @@ use core::fmt::Write;
 use nb::block;
 use OutputPin;
 use rt::{entry, exception, ExceptionFrame};
-use stm_hal::gpio::{Input, Output, PullUp, PushPull};
-use stm_hal::gpio::gpiob::{PB5, PB9};
+use stm_hal::analog::adc::{Adc, OversamplingRatio, Precision, SampleTime};
+use stm_hal::gpio::{Analog, Input, Output, PullUp, PushPull};
+use stm_hal::gpio::gpioa::{PA0, PA1};
+use stm_hal::gpio::gpiob::{PB4, PB5, PB9};
 use stm_hal::gpio::gpioc::PC6;
 use stm_hal::prelude::*;
 use stm_hal::stm32;
@@ -23,6 +25,7 @@ use stm_hal::stm32::TIM1;
 use stm_hal::timer::Channel2;
 use stm_hal::timer::pwm::PwmPin;
 
+use light_control::bsp::joystick::Joystick;
 use light_control::bsp::led::Led;
 use light_control::bsp::pin::Pin;
 use light_control::bsp::rgb::Rgb;
@@ -36,8 +39,10 @@ fn main() -> ! {
 
     // https://github.com/stm32-rs/stm32g0xx-hal
     let dp = stm32::Peripherals::take().expect("cannot take peripherals");
+    let cp = stm32::CorePeripherals::take().expect("cannot take core peripherals");
     let mut rcc = dp.RCC.constrain();
 
+    let gpioa = dp.GPIOA.split(&mut rcc);
     let gpioc = dp.GPIOC.split(&mut rcc);
     let gpiob = dp.GPIOB.split(&mut rcc);
 
@@ -49,9 +54,23 @@ fn main() -> ! {
     let mut led = PwmLed::create(dp.TIM1.pwm(10.khz(), &mut rcc).bind_pin(gpiob.pb3));
     let mut rgb = GpioRgb { pin: RefCell::new(gpioc.pc6.into_push_pull_output()), state: Cell::new(0) };
 
+    let mut adc: Adc = dp.ADC.constrain(&mut rcc);
+    adc.set_sample_time(SampleTime::T_80);
+    adc.set_precision(Precision::B_12);
+    adc.set_oversampling_ratio(OversamplingRatio::X_16);
+    adc.set_oversampling_shift(16);
+    adc.oversampling_enable(true);
+    cp.SYST.delay(&mut rcc).delay(20.us());
+    adc.calibrate();
+
     let light_control = LightControl::new(
         PlusButton { pin: gpiob.pb5.into_pull_up_input() },
-        MinusButton { pin: gpiob.pb9.into_pull_up_input() },
+        MinusButton { pin: gpiob.pb9.into_pull_up_input(), pin2: gpiob.pb4.into_pull_up_input() },
+        AdcJoystick::create(
+            gpioa.pa0.into_analog(),
+            gpioa.pa1.into_analog(),
+            adc,
+        ),
         &mut led,
         &mut rgb,
         &edt,
@@ -59,7 +78,6 @@ fn main() -> ! {
 
     light_control.start();
     light_control.jump_start();
-
 
     loop {
         match edt.poll() {
@@ -161,10 +179,41 @@ impl Pin for PlusButton {
 
 struct MinusButton {
     pin: PB9<Input<PullUp>>,
+    pin2: PB4<Input<PullUp>>,
 }
 
 impl Pin for MinusButton {
     fn is_down(&self) -> bool {
-        return self.pin.is_low().unwrap_or(false);
+        return self.pin.is_low().unwrap_or(false) || self.pin2.is_low().unwrap_or(false);
+    }
+}
+
+struct AdcJoystick {
+    adc_pin_v: RefCell<PA0<Analog>>,
+    adc_pin_h: RefCell<PA1<Analog>>,
+    adc: RefCell<Adc>,
+}
+
+impl AdcJoystick {
+    fn create(
+        adc_pin_v: PA0<Analog>,
+        adc_pin_h: PA1<Analog>,
+        adc: Adc,
+    ) -> Self {
+        AdcJoystick {
+            adc_pin_v: RefCell::new(adc_pin_v),
+            adc_pin_h: RefCell::new(adc_pin_h),
+            adc: RefCell::new(adc),
+        }
+    }
+}
+
+impl Joystick for AdcJoystick {
+    fn read(&self) -> (i32, i32) {
+        let uh_mv = self.adc.borrow_mut().read_voltage(&mut *self.adc_pin_h.borrow_mut()).expect("adc read failed") as u32;
+        let uv_mv = self.adc.borrow_mut().read_voltage(&mut *self.adc_pin_v.borrow_mut()).expect("adc read failed") as u32;
+        let x = ((uh_mv as i32) - 1660) / (1660 / 50);
+        let y = ((uv_mv as i32) - 1660) / (1660 / 50);
+        (x, y)
     }
 }

@@ -1,25 +1,29 @@
 use no_std_compat::cell::Cell;
 
+use crate::bsp::joystick::Joystick;
 use crate::bsp::led::{Led, MAX};
 use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{BLUE, GREEN, RED, Rgb};
-use crate::control::Action::{CheckButtons, SetPwm};
+use crate::control::Action::{CheckButtons, CheckJoystick, SetPwm};
 use crate::edt::EDT;
 
 /// Control logic evaluates button states and changes the light intensity
-pub struct LightControl<'a, P: Pin, M: Pin> {
+pub struct LightControl<'a, P: Pin, M: Pin, J: Joystick> {
     pub plus_pin: P,
     pub minus_pin: M,
+    pub joystick: J,
     pub led: &'a dyn Led,
     pub rgb: &'a dyn Rgb,
     pub edt: &'a EDT<Action>,
     pub led_level: Cell<usize>,
+    pub furthest_stick_position: Cell<(i32, i32)>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy)]
 pub enum Action {
     Blink { color: u8, blinks: u32 },
     CheckButtons { prev_plus: u32, prev_minus: u32 },
+    CheckJoystick,
     SetPwm { power_level: u32 },
 }
 
@@ -33,10 +37,11 @@ pub const ANIM_DURATION: u32 = 250;
 const ANIM_SIZE: usize = 20;
 const ANIM_STEP: u32 = ANIM_DURATION / ANIM_SIZE as u32;
 
-impl<'a, P: Pin, M: Pin> LightControl<'a, P, M> {
+impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
     pub fn new(
         plus_pin: P,
         minus_pin: M,
+        joystick: J,
         led: &'a dyn Led,
         rgb: &'a dyn Rgb,
         edt: &'a EDT<Action>,
@@ -44,10 +49,12 @@ impl<'a, P: Pin, M: Pin> LightControl<'a, P, M> {
         return LightControl {
             plus_pin,
             minus_pin,
+            joystick,
             led,
             rgb,
             edt,
             led_level: Cell::new(0),
+            furthest_stick_position: Cell::new((0, 0)),
         };
     }
 
@@ -58,6 +65,7 @@ impl<'a, P: Pin, M: Pin> LightControl<'a, P, M> {
     pub fn process_message(&self, action: Action) {
         match action {
             Action::CheckButtons { prev_plus, prev_minus } => self.check_buttons(prev_plus, prev_minus),
+            Action::CheckJoystick => self.handle_joystick(),
             Action::Blink { color, blinks } => self.blink_led(color, blinks),
             Action::SetPwm { power_level: goal } => self.set_power_level(goal),
         }
@@ -100,6 +108,7 @@ impl<'a, P: Pin, M: Pin> LightControl<'a, P, M> {
 
     pub fn start(&self) {
         self.check_buttons(0, 0);
+        self.handle_joystick();
     }
 
     fn on_plus_clicked(&self) {
@@ -199,6 +208,32 @@ impl<'a, P: Pin, M: Pin> LightControl<'a, P, M> {
 
     pub fn set_power_level(&self, power_level: u32) {
         self.led.set(power_level);
+    }
+
+    fn handle_joystick(&self) {
+        fn manhattan(point: (i32, i32)) -> u32 {
+            (point.0.abs() + point.1.abs()) as u32
+        }
+        let point = self.joystick.read();
+        let prev_point = self.furthest_stick_position.get();
+        if manhattan(point) >= manhattan(prev_point) {
+            // increasing displacement
+            self.furthest_stick_position.set(point);
+        } else if manhattan(point) < 20 && manhattan(prev_point) > 30 {
+            self.furthest_stick_position.set((0, 0));
+            let (x, y) = prev_point;
+            let moved_along_x = x.abs() > y.abs();
+            if moved_along_x && x > 0 {
+                self.on_plus_clicked();
+            } else if moved_along_x {
+                self.on_minus_clicked();
+            } else if y > 0 {
+                self.on_minus_clicked();
+            } else {
+                self.on_plus_clicked();
+            }
+        }
+        self.edt.schedule(50, CheckJoystick);
     }
 }
 

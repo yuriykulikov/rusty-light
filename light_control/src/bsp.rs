@@ -1,4 +1,3 @@
-
 pub mod pin {
     /// A pin (of a button) which may be down (tied to the ground) or up (floating pin)
     pub trait Pin {
@@ -25,5 +24,11 @@ pub mod led {
     pub trait Led {
         fn set(&self, duty_cycle: u32);
         fn get(&self) -> u32;
+    }
+}
+
+pub mod joystick {
+    pub trait Joystick {
+        fn read(&self) -> (i32, i32);
     }
 }
