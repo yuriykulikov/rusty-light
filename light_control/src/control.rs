@@ -31,7 +31,7 @@ pub const DELAY_CHECK_BUTTONS: u32 = 50;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000 / DELAY_CHECK_BUTTONS;
 pub const DELAY_BLINK: u32 = 100;
 
-pub const POWER_LEVELS: &'static [u32] = &[0, 7, 20, 40, 60, 80, MAX];
+pub const POWER_LEVELS: &'static [u32] = &[0, 20, 50, 75, MAX];
 const PWM_POWER_LEVEL: usize = POWER_LEVELS.len() - 1;
 pub const ANIM_DURATION: u32 = 500;
 const ANIM_SIZE: usize = 20;
@@ -59,7 +59,7 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
     }
 
     pub fn jump_start(&self) {
-        self.set_led_level_with_animation(3, linear_steps);
+        self.set_led_level_with_animation(2, linear_steps);
     }
 
     pub fn process_message(&self, action: Action) {
