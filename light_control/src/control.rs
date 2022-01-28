@@ -272,7 +272,7 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
                 self.on_plus_clicked();
             } else if moved_along_x {
                 self.on_minus_clicked();
-            } else if y > 0 {
+            } else if y < 0 {
                 self.on_minus_clicked();
             } else {
                 self.on_plus_clicked();

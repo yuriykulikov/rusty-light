@@ -2,9 +2,8 @@ use core::cell::RefCell;
 
 use stm_hal::analog::adc::Adc;
 
-use light_control::bsp::joystick::Joystick;
-
 use crate::hal::adc::Channel;
+use light_control::bsp::joystick::Joystick;
 
 pub struct AdcJoystick<PinV: Channel<Adc, ID = u8>, PinH: Channel<Adc, ID = u8>> {
     adc_pin_v: RefCell<PinV>,
@@ -37,7 +36,7 @@ impl<PinV: Channel<Adc, ID = u8>, PinH: Channel<Adc, ID = u8>> Joystick
             .read_voltage(&mut *self.adc_pin_v.borrow_mut())
             .expect("adc read failed") as u32;
         let x = ((uh_mv as i32) - 1660) / (1660 / 50);
-        let y = ((uv_mv as i32) - 1660) / (1660 / 50);
+        let y = -((uv_mv as i32) - 1660) / (1660 / 50);
         (x, y)
     }
 }

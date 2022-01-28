@@ -28,10 +28,25 @@ impl Pin for KeyboardPin {
     }
 }
 
-pub struct DummyJoystick {}
+pub struct DummyJoystick {
+    pub(crate) left: KeyboardPin,
+    pub(crate) right: KeyboardPin,
+    pub(crate) up: KeyboardPin,
+    pub(crate) down: KeyboardPin,
+}
 
 impl Joystick for DummyJoystick {
     fn read(&self) -> (i32, i32) {
-        (0, 0)
+        if self.left.is_down() {
+            (-50, 0)
+        } else if self.right.is_down() {
+            (50, 0)
+        } else if self.up.is_down() {
+            (0, 50)
+        } else if self.down.is_down() {
+            (0, -50)
+        } else {
+            (0, 0)
+        }
     }
 }
