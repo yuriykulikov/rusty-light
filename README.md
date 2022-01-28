@@ -40,4 +40,7 @@ cargo objcopy --target=thumbv6m-none-eabi --bin blackboard -- -O ihex blackboard
 
 or simply `./flash.sh`
 ### Console
+
+`sudo apt install libx11-dev`
+
 `cargo run --bin console_sim`

@@ -13,7 +13,10 @@ impl KeyboardPin {
     /// Factory function to create a [KeyboardPin]
     pub fn create(key_code: u16) -> KeyboardPin {
         let device_state = DeviceState::new();
-        return KeyboardPin { device_state, key_code };
+        return KeyboardPin {
+            device_state,
+            key_code,
+        };
     }
 }
 
@@ -25,7 +28,7 @@ impl Pin for KeyboardPin {
     }
 }
 
-struct DummyJoystick {}
+pub struct DummyJoystick {}
 
 impl Joystick for DummyJoystick {
     fn read(&self) -> (i32, i32) {

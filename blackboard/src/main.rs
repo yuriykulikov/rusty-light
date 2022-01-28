@@ -1,4 +1,5 @@
-#![no_std]
+// make `std` available when testing
+#![cfg_attr(not(test), no_std)]
 #![no_main]
 
 extern crate cortex_m;
@@ -12,31 +13,31 @@ use core::cell::{Cell, RefCell};
 use core::fmt::Write;
 
 use nb::block;
-use OutputPin;
 use rt::{entry, exception, ExceptionFrame};
 use stm_hal::analog::adc::{Adc, OversamplingRatio, Precision, SampleTime};
-use stm_hal::gpio::{Analog, Input, Output, PullUp, PushPull};
 use stm_hal::gpio::gpioa::{PA0, PA1};
 use stm_hal::gpio::gpiob::{PB4, PB5, PB9};
 use stm_hal::gpio::gpioc::PC6;
+use stm_hal::gpio::{Analog, Input, Output, PullUp, PushPull};
 use stm_hal::prelude::*;
 use stm_hal::stm32;
 use stm_hal::stm32::TIM1;
-use stm_hal::timer::Channel2;
 use stm_hal::timer::pwm::PwmPin;
+use stm_hal::timer::Channel2;
+use OutputPin;
 
 use light_control::bsp::joystick::Joystick;
 use light_control::bsp::led::Led;
 use light_control::bsp::pin::Pin;
 use light_control::bsp::rgb::Rgb;
 use light_control::control::LightControl;
-use light_control::edt::{EDT, Event};
+use light_control::edt::{Event, EDT};
 use light_control::perceived_light_math::fill_pwm_duty_cycle_values;
 
 #[entry]
 fn main() -> ! {
     let mut output = jlink_rtt::NonBlockingOutput::new();
-    let _ = writeln!(output, "Hello {}", 42);
+    let _ = writeln!(output, "Firmware started!");
 
     // https://github.com/stm32-rs/stm32g0xx-hal
     let dp = stm32::Peripherals::take().expect("cannot take peripherals");
@@ -53,7 +54,10 @@ fn main() -> ! {
     let mut timer = dp.TIM17.timer(&mut rcc);
     let edt = EDT::create();
     let mut led = PwmLed::create(dp.TIM1.pwm(10.khz(), &mut rcc).bind_pin(gpiob.pb3));
-    let mut rgb = GpioRgb { pin: RefCell::new(gpioc.pc6.into_push_pull_output()), state: Cell::new(0) };
+    let mut rgb = GpioRgb {
+        pin: RefCell::new(gpioc.pc6.into_push_pull_output()),
+        state: Cell::new(0),
+    };
 
     let mut adc: Adc = dp.ADC.constrain(&mut rcc);
     adc.set_sample_time(SampleTime::T_80);
@@ -65,13 +69,14 @@ fn main() -> ! {
     adc.calibrate();
 
     let light_control = LightControl::new(
-        PlusButton { pin: gpiob.pb5.into_pull_up_input() },
-        MinusButton { pin: gpiob.pb9.into_pull_up_input(), pin2: gpiob.pb4.into_pull_up_input() },
-        AdcJoystick::create(
-            gpioa.pa0.into_analog(),
-            gpioa.pa1.into_analog(),
-            adc,
-        ),
+        PlusButton {
+            pin: gpiob.pb5.into_pull_up_input(),
+        },
+        MinusButton {
+            pin: gpiob.pb9.into_pull_up_input(),
+            pin2: gpiob.pb4.into_pull_up_input(),
+        },
+        AdcJoystick::create(gpioa.pa0.into_analog(), gpioa.pa1.into_analog(), adc),
         &mut led,
         &mut rgb,
         &edt,
@@ -127,9 +132,6 @@ impl PwmLed {
         led.pwm_ch.borrow_mut().set_duty(0);
         led.pwm_ch.borrow_mut().enable();
 
-        let mut output = jlink_rtt::Output::new();
-        writeln!(output, "Calculating, max is {}", max);
-
         fill_pwm_duty_cycle_values(&mut led.duties, min_visible_pwm_duty_cycle, max);
 
         return led;
@@ -142,7 +144,7 @@ impl Led for PwmLed {
         let duty_cycle = self.duties[pwm as usize];
         self.pwm_ch.borrow_mut().set_duty(duty_cycle);
         let mut output = jlink_rtt::NonBlockingOutput::new();
-        writeln!(output, "{}% -> {}", pwm, duty_cycle);
+        writeln!(output, "{}% -> {}", pwm, duty_cycle).unwrap();
     }
 
     fn get(&self) -> u32 {
@@ -198,11 +200,7 @@ struct AdcJoystick {
 }
 
 impl AdcJoystick {
-    fn create(
-        adc_pin_v: PA0<Analog>,
-        adc_pin_h: PA1<Analog>,
-        adc: Adc,
-    ) -> Self {
+    fn create(adc_pin_v: PA0<Analog>, adc_pin_h: PA1<Analog>, adc: Adc) -> Self {
         AdcJoystick {
             adc_pin_v: RefCell::new(adc_pin_v),
             adc_pin_h: RefCell::new(adc_pin_h),
@@ -213,8 +211,16 @@ impl AdcJoystick {
 
 impl Joystick for AdcJoystick {
     fn read(&self) -> (i32, i32) {
-        let uh_mv = self.adc.borrow_mut().read_voltage(&mut *self.adc_pin_h.borrow_mut()).expect("adc read failed") as u32;
-        let uv_mv = self.adc.borrow_mut().read_voltage(&mut *self.adc_pin_v.borrow_mut()).expect("adc read failed") as u32;
+        let uh_mv = self
+            .adc
+            .borrow_mut()
+            .read_voltage(&mut *self.adc_pin_h.borrow_mut())
+            .expect("adc read failed") as u32;
+        let uv_mv = self
+            .adc
+            .borrow_mut()
+            .read_voltage(&mut *self.adc_pin_v.borrow_mut())
+            .expect("adc read failed") as u32;
         let x = ((uh_mv as i32) - 1660) / (1660 / 50);
         let y = ((uv_mv as i32) - 1660) / (1660 / 50);
         (x, y)

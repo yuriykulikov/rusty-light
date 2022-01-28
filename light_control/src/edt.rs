@@ -32,7 +32,9 @@ pub enum Event<T> {
 }
 
 impl<T: Copy> EDT<T> {
-    pub fn now(&self) -> u32 { self.now.get() }
+    pub fn now(&self) -> u32 {
+        self.now.get()
+    }
 
     pub fn exit(&self) {
         // clearing the queue ends the loop
@@ -40,7 +42,7 @@ impl<T: Copy> EDT<T> {
     }
 
     pub fn poll(&self) -> Event<T> {
-        if self.queue.borrow().iter().all(|msg| { msg.is_none() }) {
+        if self.queue.borrow().iter().all(|msg| msg.is_none()) {
             return Event::Halt;
         }
 
@@ -55,15 +57,16 @@ impl<T: Copy> EDT<T> {
             let next_when = head.when;
 
             // WTF is that
-            self.queue.borrow_mut()
+            self.queue
+                .borrow_mut()
                 .iter_mut()
                 .filter(|it| {
-                    it.is_some()
-                        && it.unwrap().when == head.when
-                        && it.unwrap().order == head.order
+                    it.is_some() && it.unwrap().when == head.when && it.unwrap().order == head.order
                 })
                 .take(1)
-                .for_each(|opt| { *opt = None; });
+                .for_each(|opt| {
+                    *opt = None;
+                });
 
             self.now.set(next_when);
             Event::Execute { msg: head.payload }
@@ -71,12 +74,14 @@ impl<T: Copy> EDT<T> {
     }
 
     /// Advances the time by the given value and feeds messages to the handler
-    pub fn advance_time_by(&self, time: u32,  handler: &dyn Fn(T)) {
+    pub fn advance_time_by(&self, time: u32, handler: &dyn Fn(T)) {
         let target = self.now.get() + time;
         let mut elapsed: u32 = 0;
         loop {
             match self.poll() {
-                Event::Execute { msg } => { handler(msg); }
+                Event::Execute { msg } => {
+                    handler(msg);
+                }
                 Event::Wait { ms } => {
                     elapsed = elapsed + ms;
                     if elapsed > time {
@@ -84,18 +89,25 @@ impl<T: Copy> EDT<T> {
                         break;
                     }
                 }
-                Event::Halt => { break; }
+                Event::Halt => {
+                    break;
+                }
             }
         }
     }
 
     fn peek_head(&self) -> Msg<T> {
-        self.queue.borrow()
+        self.queue
+            .borrow()
             .iter()
-            .filter_map(|&opt| { opt })
+            .filter_map(|&opt| opt)
             .min_by(|lhs, rhs| {
                 let by_when = lhs.when.cmp(&rhs.when);
-                if by_when != Equal { by_when } else { lhs.order.cmp(&rhs.order) }
+                if by_when != Equal {
+                    by_when
+                } else {
+                    lhs.order.cmp(&rhs.order)
+                }
             })
             .unwrap()
     }
@@ -103,25 +115,36 @@ impl<T: Copy> EDT<T> {
     pub fn schedule(&self, delay: u32, payload: T) {
         let when = self.now.get() + delay;
 
-        let order = self.queue.borrow()
+        let order = self
+            .queue
+            .borrow()
             .iter()
-            .filter(|opt| { opt.is_some() && opt.unwrap().when == when })
-            .map(|it| { it.unwrap().order })
+            .filter(|opt| opt.is_some() && opt.unwrap().when == when)
+            .map(|it| it.unwrap().order)
             .max()
             .unwrap_or(0);
 
         // TODO this is a very strange way to do that, especially take(1)
-        self.queue.borrow_mut()
+        self.queue
+            .borrow_mut()
             .iter_mut()
-            .filter(|it| { it.is_none() })
+            .filter(|it| it.is_none())
             .take(1)
             .for_each(|opt| {
-                *opt = Some(Msg { when, order, payload });
+                *opt = Some(Msg {
+                    when,
+                    order,
+                    payload,
+                });
             })
     }
 
-    pub fn remove<F>(&self, mut predicate: F) where F: FnMut(&T) -> bool {
-        self.queue.borrow_mut()
+    pub fn remove<F>(&self, mut predicate: F)
+    where
+        F: FnMut(&T) -> bool,
+    {
+        self.queue
+            .borrow_mut()
             .iter_mut()
             .filter(|it| it.is_some() && predicate(&it.unwrap().payload))
             .for_each(|opt| {

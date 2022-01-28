@@ -1,9 +1,9 @@
-use std::cell::Cell;
 use light_control::bsp::rgb::Rgb;
+use std::cell::Cell;
 
 /// Led which resides in memory, for simulation or testing
 pub struct DummyRgb {
-    rgb: Cell<u8>
+    rgb: Cell<u8>,
 }
 
 impl DummyRgb {
@@ -21,4 +21,3 @@ impl Rgb for DummyRgb {
         return self.rgb.get();
     }
 }
-

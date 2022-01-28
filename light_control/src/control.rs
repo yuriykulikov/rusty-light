@@ -3,7 +3,7 @@ use no_std_compat::cell::Cell;
 use crate::bsp::joystick::Joystick;
 use crate::bsp::led::{Led, MAX};
 use crate::bsp::pin::Pin;
-use crate::bsp::rgb::{BLUE, GREEN, RED, Rgb};
+use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
 use crate::control::Action::{CheckButtons, CheckJoystick, SetPwm};
 use crate::edt::EDT;
 
@@ -64,7 +64,10 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
 
     pub fn process_message(&self, action: Action) {
         match action {
-            Action::CheckButtons { prev_plus, prev_minus } => self.check_buttons(prev_plus, prev_minus),
+            Action::CheckButtons {
+                prev_plus,
+                prev_minus,
+            } => self.check_buttons(prev_plus, prev_minus),
             Action::CheckJoystick => self.handle_joystick(),
             Action::Blink { color, blinks } => self.blink_led(color, blinks),
             Action::SetPwm { power_level: goal } => self.set_power_level(goal),
@@ -75,7 +78,13 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
         if blinks > 0 {
             let rgb = self.rgb.get_rgb();
             self.rgb.set_rgb(rgb ^ color);
-            self.edt.schedule(DELAY_BLINK, Action::Blink { color, blinks: blinks - 1 });
+            self.edt.schedule(
+                DELAY_BLINK,
+                Action::Blink {
+                    color,
+                    blinks: blinks - 1,
+                },
+            );
         }
     }
 
@@ -100,10 +109,24 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
             }
         }
 
-        let next_plus = if self.plus_pin.is_down() { prev_plus + 1 } else { 0 };
-        let next_minus = if self.minus_pin.is_down() { prev_minus + 1 } else { 0 };
+        let next_plus = if self.plus_pin.is_down() {
+            prev_plus + 1
+        } else {
+            0
+        };
+        let next_minus = if self.minus_pin.is_down() {
+            prev_minus + 1
+        } else {
+            0
+        };
 
-        self.edt.schedule(DELAY_CHECK_BUTTONS, CheckButtons { prev_plus: next_plus, prev_minus: next_minus });
+        self.edt.schedule(
+            DELAY_CHECK_BUTTONS,
+            CheckButtons {
+                prev_plus: next_plus,
+                prev_minus: next_minus,
+            },
+        );
     }
 
     pub fn start(&self) {
@@ -146,18 +169,25 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
     }
 
     fn remove_blinks(&self) {
-        self.edt.remove(|action| {
-            match action {
-                Action::Blink { color: _, blinks: _ } => true,
-                _ => false
-            }
+        self.edt.remove(|action| match action {
+            Action::Blink {
+                color: _,
+                blinks: _,
+            } => true,
+            _ => false,
         });
     }
 
     fn blink(&self, color: u8, times: u32, period: u32) {
         self.rgb.set_rgb(color);
         self.remove_blinks();
-        self.edt.schedule(period, Action::Blink { color, blinks: times });
+        self.edt.schedule(
+            period,
+            Action::Blink {
+                color,
+                blinks: times,
+            },
+        );
     }
 
     fn indicate_nop(&self) {
@@ -174,15 +204,27 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
 
     fn change_led_level(&self, change: usize, inc: bool) {
         let current = self.led_level.get();
-        if inc && current == PWM_POWER_LEVEL { return; }
-        if !inc && current == 0 { return; }
+        if inc && current == PWM_POWER_LEVEL {
+            return;
+        }
+        if !inc && current == 0 {
+            return;
+        }
 
-        let new_level = if inc { current + change } else { current - change };
+        let new_level = if inc {
+            current + change
+        } else {
+            current - change
+        };
 
         self.set_led_level_with_animation(new_level, linear_steps);
     }
 
-    fn set_led_level_with_animation(&self, new_level: usize, animation: fn(u32, u32) -> [u32; ANIM_SIZE]) {
+    fn set_led_level_with_animation(
+        &self,
+        new_level: usize,
+        animation: fn(u32, u32) -> [u32; ANIM_SIZE],
+    ) {
         self.led_level.set(new_level);
 
         // animation
@@ -193,16 +235,19 @@ impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
 
         let steps = animation(current_power_level, goal);
         for i in 0..ANIM_SIZE {
-            self.edt.schedule(ANIM_STEP * i as u32, SetPwm { power_level: steps[i] });
+            self.edt.schedule(
+                ANIM_STEP * i as u32,
+                SetPwm {
+                    power_level: steps[i],
+                },
+            );
         }
     }
 
     fn remove_set_power_level_messages(&self) {
-        self.edt.remove(|msg| {
-            match msg {
-                Action::SetPwm { power_level: _ } => true,
-                _ => false
-            }
+        self.edt.remove(|msg| match msg {
+            Action::SetPwm { power_level: _ } => true,
+            _ => false,
         });
     }
 
@@ -257,29 +302,36 @@ mod tests {
     #[test]
     fn linear_step_up() {
         let steps = linear_steps(0, 20);
-        assert_eq!(steps, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+        assert_eq!(
+            steps,
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        );
     }
 
     #[test]
     fn linear_step_up_big() {
         let steps = linear_steps(0, 40);
-        assert_eq!(steps, [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40]);
+        assert_eq!(
+            steps,
+            [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40]
+        );
     }
-
 
     #[test]
     fn linear_step_down() {
         let steps = linear_steps(60, 80);
-        assert_eq!(steps, [61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]);
+        assert_eq!(
+            steps,
+            [61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]
+        );
     }
 
     #[test]
     fn linear_step_down_big() {
         let steps = linear_steps(80, 0);
-        assert_eq!(steps, [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8, 4, 0]);
+        assert_eq!(
+            steps,
+            [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8, 4, 0]
+        );
     }
 }
-
-
-
-

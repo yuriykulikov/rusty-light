@@ -15,7 +15,14 @@ mod tests {
         edt.schedule(3000, 4);
 
         // assert that queue has 4 messages
-        assert_eq!(edt.queue.borrow().iter().filter(|it| { it.is_some() }).count(), 4);
+        assert_eq!(
+            edt.queue
+                .borrow()
+                .iter()
+                .filter(|it| { it.is_some() })
+                .count(),
+            4
+        );
     }
 
     #[test]
@@ -29,10 +36,10 @@ mod tests {
         edt.schedule(3000, 4);
 
         // when
-        edt.remove(|payload| { *payload == 2 });
+        edt.remove(|payload| *payload == 2);
 
         // then 2 messages are removed, 2 retained
-        let retained = edt.queue.borrow().iter().filter(|it| { it.is_some() }).count();
+        let retained = edt.queue.borrow().iter().filter(|it| it.is_some()).count();
         assert_eq!(retained, 2);
     }
 
@@ -57,7 +64,14 @@ mod tests {
         assert_eq!(events.borrow_mut().remove(0), 2);
 
         // then one event message remains
-        assert_eq!(edt.queue.borrow().iter().filter(|it| { it.is_some() }).count(), 1);
+        assert_eq!(
+            edt.queue
+                .borrow()
+                .iter()
+                .filter(|it| { it.is_some() })
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -70,8 +84,8 @@ mod tests {
         edt.schedule(5, 3);
 
         // this creates a "hole" in the array
-        edt.remove(|payload| { *payload == 1 });
-        edt.remove(|payload| { *payload == 2 });
+        edt.remove(|payload| *payload == 1);
+        edt.remove(|payload| *payload == 2);
 
         // events are scheduled in the "hole"
         edt.schedule(10, 4);
