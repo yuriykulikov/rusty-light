@@ -40,6 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let light_control = LightControl::new(plus_pin, minus_pin, joystick, &led, &rgb, &edt);
     light_control.start();
+    light_control.jump_start();
 
     enable_raw_mode().expect("can run in raw mode");
     let backend = CrosstermBackend::new(io::stdout());
@@ -108,6 +109,9 @@ fn draw_tui(
         let sim_paragraph = Paragraph::new(vec![
             Spans::from(Span::raw(format!("brightness: {}", led))),
             Spans::from(Span::styled(format!("   LED   "), rgb_style)),
+            Spans::from(Span::raw(format!(
+                "Joystick: ← ↑ → ↓, Buttons(click and long-click): PGUP PGDN, ESC to terminate"
+            ))),
         ])
         .alignment(Alignment::Left);
 
@@ -121,8 +125,8 @@ fn draw_tui(
 fn keys() -> (KeyboardPin, KeyboardPin, KeyboardPin) {
     return (
         KeyboardPin::create(1),
-        KeyboardPin::create(105),
-        KeyboardPin::create(106),
+        KeyboardPin::create(109),
+        KeyboardPin::create(104),
     );
 }
 

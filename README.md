@@ -1,21 +1,17 @@
 # rusty-light
 Awesome flashlight firmware written in rust
 
-## What is it all about
-In better times programmers had to write a lot of code themselves.
-Need a hashmap? Implement one! Linked list? - better start hacking.
-OS? Send an email and get going.
+## Hardware
+[Blackboard](./blackboard/README.md) targets
+[STM32 Nucleo-32 boards (MB1180)](https://www.st.com/resource/en/user_manual/dm00231744-stm32-nucleo32-boards-mb1180-stmicroelectronics.pdf)
+boards.
 
-It was fun! Now these days are over. There are libraries for everything.
-We get it. We use libraries at work. It makes sense, but, here we can have some fun!
-This is all this project is about - get creative!
-
-## Crazy? Yes, please!
-There are no limits on over engineering here.
-
-## The IKEA effect
-To keep the motivation up, we are going to use these devices for our daily commute
-and, occasionally, a nice bike trip.
+## LED drivers
+One or two LED drivers are required to drive LEDs. Drivers are controlled with PWM.
+You can use boost drivers with 3 LEDs or buck drivers with one LED.
+We have some drivers of our own design using LT3477 as well as
+[Led Senser V2](https://www.ledtreiber.de/shop/Led-Senser-V2-R-2-%E2%80%A2-100-1350mA-%E2%80%A2-2-6V~18V-p164952213)
+and [Led Senser Xtreme R.2](https://www.ledtreiber.de/shop/Led-Senser-Xtreme-R-2-%E2%80%A2-200-3050mA-%E2%80%A2-6V~40V-p164951429).
 
 ## Building and running
 ### On the blackboard
