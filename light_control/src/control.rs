@@ -8,11 +8,14 @@ use crate::control::Action::{CheckButtons, CheckJoystick, SetPwm};
 use crate::edt::EDT;
 
 /// Control logic evaluates button states and changes the light intensity
-pub struct LightControl<'a, P: Pin, M: Pin, J: Joystick> {
+pub struct LightControl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> {
     pub plus_pin: P,
     pub minus_pin: M,
+    pub toggle_pin: T,
     pub joystick: J,
     pub led: &'a dyn Led,
+    pub led_high: &'a dyn Led,
+    pub high_beam: Cell<bool>,
     pub rgb: &'a dyn Rgb,
     pub edt: &'a EDT<Action>,
     pub led_level: Cell<usize>,
@@ -37,20 +40,25 @@ pub const ANIM_DURATION: u32 = 500;
 const ANIM_SIZE: usize = 20;
 const ANIM_STEP: u32 = ANIM_DURATION / ANIM_SIZE as u32;
 
-impl<'a, P: Pin, M: Pin, J: Joystick> LightControl<'a, P, M, J> {
+impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
     pub fn new(
         plus_pin: P,
         minus_pin: M,
+        toggle_pin: T,
         joystick: J,
         led: &'a dyn Led,
+        led_high: &'a dyn Led,
         rgb: &'a dyn Rgb,
         edt: &'a EDT<Action>,
     ) -> Self {
         return LightControl {
             plus_pin,
             minus_pin,
+            toggle_pin,
             joystick,
             led,
+            led_high,
+            high_beam: Cell::new(false),
             rgb,
             edt,
             led_level: Cell::new(0),

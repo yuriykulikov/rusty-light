@@ -6,7 +6,7 @@ mod tests {
     use light_control::bsp::led::{Led, MAX};
     use light_control::bsp::pin::Pin;
     use light_control::bsp::rgb::Rgb;
-    use light_control::control::{LightControl, ANIM_DURATION, DELAY_CHECK_BUTTONS, POWER_LEVELS};
+    use light_control::control::{ANIM_DURATION, DELAY_CHECK_BUTTONS, LightControl, POWER_LEVELS};
     use light_control::edt::EDT;
 
     #[test]
@@ -99,24 +99,27 @@ mod tests {
     fn with_bench(block: &dyn Fn(&dyn Fn(u32), Buttons, &Cell<u32>)) {
         let plus_pin = Cell::new(false);
         let minus_pin = Cell::new(false);
+        let toggle_pin = Cell::new(false);
         let power_level = Cell::new(0);
+        let power_level_high = Cell::new(0);
         let led = TestLed {
             power_output: &power_level,
         };
+        let led_high = TestLed {
+            power_output: &power_level_high,
+        };
         let rgb = TestRgb { rgb: Cell::new(0) };
         let edt = EDT::create();
-        let light_control = LightControl {
-            plus_pin: TestPin { is_down: &plus_pin },
-            minus_pin: TestPin {
-                is_down: &minus_pin,
-            },
-            joystick: TestJoystick {},
-            led: &led,
-            edt: &edt,
-            rgb: &rgb,
-            led_level: Cell::new(0),
-            furthest_stick_position: Cell::new((0, 0)),
-        };
+        let light_control = LightControl::new(
+            TestPin { is_down: &plus_pin },
+            TestPin { is_down: &minus_pin },
+            TestPin { is_down: &toggle_pin },
+            TestJoystick {},
+            &led,
+            &led_high,
+            &rgb,
+            &edt,
+        );
         light_control.start();
         light_control.jump_start();
         edt.advance_time_by(1000, &|msg| {
@@ -135,6 +138,7 @@ mod tests {
             Buttons {
                 plus_pin: &plus_pin,
                 minus_pin: &minus_pin,
+                toggle_pin: &toggle_pin,
                 advance_time: &advance_time,
             },
             &power_level,
@@ -181,6 +185,7 @@ mod tests {
     pub struct Buttons<'a> {
         plus_pin: &'a Cell<bool>,
         minus_pin: &'a Cell<bool>,
+        toggle_pin: &'a Cell<bool>,
         advance_time: &'a dyn Fn(u32),
     }
 

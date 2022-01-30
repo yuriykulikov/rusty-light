@@ -51,6 +51,7 @@ fn main() -> ! {
     let edt = EDT::create();
     let pwm = dp.TIM1.pwm(16000.hz(), &mut rcc);
     let mut led = PwmLed::create(pwm.bind_pin(gpiob.pb3));
+    let mut led_high = PwmLed::create(pwm.bind_pin(gpioa.pa8));
     let mut rgb = GpioRgb {
         pin: RefCell::new(gpioc.pc6.into_push_pull_output()),
         state: Cell::new(0),
@@ -70,10 +71,14 @@ fn main() -> ! {
             pin: gpiob.pb5.into_pull_up_input(),
         },
         PullUpButton {
+            pin: gpiob.pb9.into_pull_up_input(),
+        },
+        PullUpButton {
             pin: gpiob.pb4.into_pull_up_input(),
         },
         AdcJoystick::create(gpioa.pa0.into_analog(), gpioa.pa1.into_analog(), adc),
         &mut led,
+        &mut led_high,
         &mut rgb,
         &edt,
     );

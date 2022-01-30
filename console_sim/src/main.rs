@@ -28,6 +28,7 @@ mod keyboard_pin;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (esc_pin, minus_pin, plus_pin) = keys();
     let led = DummyLed::create(0);
+    let led_high = DummyLed::create(0);
     let rgb = DummyRgb::create();
     let joystick = DummyJoystick {
         left: KeyboardPin::create(105),
@@ -38,7 +39,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let edt = EDT::create();
 
-    let light_control = LightControl::new(plus_pin, minus_pin, joystick, &led, &rgb, &edt);
+    let light_control = LightControl::new(
+        plus_pin,
+        minus_pin,
+        KeyboardPin::create(28),
+        joystick,
+        &led,
+        &led_high,
+        &rgb,
+        &edt,
+    );
     light_control.start();
     light_control.jump_start();
 
@@ -60,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        draw_tui(&mut terminal, led.get(), rgb.get_rgb())?;
+        draw_tui(&mut terminal, led.get(), led_high.get(), rgb.get_rgb())?;
     }
 
     disable_raw_mode().expect("can go back to normal");
@@ -71,6 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn draw_tui(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     led: u32,
+    led_high: u32,
     rgb: u8,
 ) -> io::Result<()> {
     terminal.draw(|rect| {
@@ -80,6 +91,7 @@ fn draw_tui(
             .margin(2)
             .constraints(
                 [
+                    Constraint::Length(3),
                     Constraint::Length(3),
                     Constraint::Min(2),
                     Constraint::Length(3),
@@ -100,6 +112,18 @@ fn draw_tui(
                 .border_type(BorderType::Rounded),
         );
 
+        let brightness_high_paragraph = Paragraph::new(Spans::from(Span::styled(
+            " ".repeat(led_high as usize),
+            Style::default().bg(Color::Rgb(253, 244, 220)),
+        )))
+        .alignment(Alignment::Center)
+        .block(
+            // Block::default().borders(Borders::BOTTOM).border_type(BorderType::Plain)
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        );
+
         let rgb_style = Style::default().bg(Color::Rgb(
             if rgb & RED > 0 { 230 } else { 0 },
             if rgb & GREEN > 0 { 230 } else { 0 },
@@ -107,7 +131,8 @@ fn draw_tui(
         ));
 
         let sim_paragraph = Paragraph::new(vec![
-            Spans::from(Span::raw(format!("brightness: {}", led))),
+            Spans::from(Span::raw(format!("High: {}", led_high))),
+            Spans::from(Span::raw(format!("Low: {}", led))),
             Spans::from(Span::styled(format!("   LED   "), rgb_style)),
             Spans::from(Span::raw(format!(
                 "Joystick: ← ↑ → ↓, Buttons(click and long-click): PGUP PGDN, ESC to terminate"
@@ -115,8 +140,9 @@ fn draw_tui(
         ])
         .alignment(Alignment::Left);
 
-        rect.render_widget(brightness_paragraph, vertical_layout[0]);
-        rect.render_widget(sim_paragraph, vertical_layout[1]);
+        rect.render_widget(brightness_high_paragraph, vertical_layout[0]);
+        rect.render_widget(brightness_paragraph, vertical_layout[1]);
+        rect.render_widget(sim_paragraph, vertical_layout[2]);
     })?;
     Ok(())
 }
