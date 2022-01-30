@@ -5,40 +5,86 @@ use crate::bsp::led::{Led, MAX};
 use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
 use crate::control::Action::{CheckButtons, CheckJoystick, SetPwm};
+use crate::control::ButtonState::{Clicked, LongClicked, Nothing};
 use crate::edt::EDT;
-
-/// Control logic evaluates button states and changes the light intensity
-pub struct LightControl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> {
-    pub plus_pin: P,
-    pub minus_pin: M,
-    pub toggle_pin: T,
-    pub joystick: J,
-    pub led: &'a dyn Led,
-    pub led_high: &'a dyn Led,
-    pub high_beam: Cell<bool>,
-    pub rgb: &'a dyn Rgb,
-    pub edt: &'a EDT<Action>,
-    pub led_level: Cell<usize>,
-    pub furthest_stick_position: Cell<(i32, i32)>,
-}
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy)]
 pub enum Action {
-    Blink { color: u8, blinks: u32 },
-    CheckButtons { prev_plus: u32, prev_minus: u32 },
+    Blink {
+        color: u8,
+        blinks: u8,
+        period: u16,
+    },
+    CheckButtons,
     CheckJoystick,
-    SetPwm { power_level: u32 },
+    SetPwm {
+        start: u8,
+        end: u8,
+        i: usize,
+        high_beam: bool,
+    },
 }
 
-pub const DELAY_CHECK_BUTTONS: u32 = 50;
-pub const LONG_CLICK_THRESHOLD: u32 = 1000 / DELAY_CHECK_BUTTONS;
-pub const DELAY_BLINK: u32 = 100;
+pub const BUTTON_CHECK_PERIOD: u32 = 50;
+pub const LONG_CLICK_THRESHOLD: u32 = 1000;
+pub const DELAY_BLINK: u16 = 100;
 
-pub const POWER_LEVELS: &'static [u32] = &[0, 20, 50, 75, MAX];
-const PWM_POWER_LEVEL: usize = POWER_LEVELS.len() - 1;
+pub const POWER_LEVELS_HIGH: &'static [u8] = &[0, 20, 50, 75, 90];
+pub const POWER_LEVELS_HIGH_AUX: &'static [u8] = &[0, 0, 0, 10, 15];
+
+pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 20, 50, 75, MAX as u8];
+pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 20, 30, 40, 50];
+
+pub const MAX_POWER_LEVEL: usize = POWER_LEVELS_LOW.len() - 1;
 pub const ANIM_DURATION: u32 = 500;
 const ANIM_SIZE: usize = 20;
 const ANIM_STEP: u32 = ANIM_DURATION / ANIM_SIZE as u32;
+
+enum ButtonState {
+    Nothing,
+    Clicked,
+    LongClicked,
+}
+
+/// Button which remembers how long has it been held down
+struct StatefulButton<P: Pin> {
+    pin: P,
+    hold_time: Cell<u32>,
+}
+
+impl<P: Pin> StatefulButton<P> {
+    // TODO what about mut?
+    fn check_state(&self, elapsed_time: u32) -> ButtonState {
+        let held = self.hold_time.get();
+        let pin_down = self.pin.is_down();
+
+        self.hold_time
+            .set(if pin_down { held + elapsed_time } else { 0 });
+
+        if pin_down && held == LONG_CLICK_THRESHOLD {
+            LongClicked
+        } else if !pin_down && held > 1 && held < LONG_CLICK_THRESHOLD {
+            Clicked
+        } else {
+            Nothing
+        }
+    }
+}
+
+/// Control logic evaluates button states and changes the light intensity
+pub struct LightControl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> {
+    plus_pin: StatefulButton<P>,
+    minus_pin: StatefulButton<M>,
+    toggle_pin: StatefulButton<T>,
+    joystick: J,
+    led: &'a dyn Led,
+    led_high: &'a dyn Led,
+    high_beam: Cell<bool>,
+    rgb: &'a dyn Rgb,
+    edt: &'a EDT<Action>,
+    power_level: Cell<usize>,
+    furthest_stick_position: Cell<(i32, i32)>,
+}
 
 impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
     pub fn new(
@@ -52,102 +98,99 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
         edt: &'a EDT<Action>,
     ) -> Self {
         return LightControl {
-            plus_pin,
-            minus_pin,
-            toggle_pin,
+            plus_pin: StatefulButton {
+                pin: plus_pin,
+                hold_time: Cell::new(0),
+            },
+            minus_pin: StatefulButton {
+                pin: minus_pin,
+                hold_time: Cell::new(0),
+            },
+            toggle_pin: StatefulButton {
+                pin: toggle_pin,
+                hold_time: Cell::new(0),
+            },
             joystick,
             led,
             led_high,
             high_beam: Cell::new(false),
             rgb,
             edt,
-            led_level: Cell::new(0),
+            power_level: Cell::new(0),
             furthest_stick_position: Cell::new((0, 0)),
         };
     }
 
+    pub fn start(&self) {
+        self.check_buttons();
+        self.handle_joystick();
+    }
+
     pub fn jump_start(&self) {
-        self.set_led_level_with_animation(2, linear_steps);
+        self.set_power_level(2);
     }
 
     pub fn process_message(&self, action: Action) {
         match action {
-            Action::CheckButtons {
-                prev_plus,
-                prev_minus,
-            } => self.check_buttons(prev_plus, prev_minus),
+            Action::CheckButtons => self.check_buttons(),
             Action::CheckJoystick => self.handle_joystick(),
-            Action::Blink { color, blinks } => self.blink_led(color, blinks),
-            Action::SetPwm { power_level: goal } => self.set_power_level(goal),
+            Action::Blink {
+                color,
+                blinks,
+                period,
+            } => self.blink_led(color, blinks, period),
+            Action::SetPwm {
+                start,
+                end,
+                i,
+                high_beam,
+            } => {
+                self.continue_led_animation(start, end, i, high_beam);
+            }
         }
     }
 
-    fn blink_led(&self, color: u8, blinks: u32) {
+    fn blink_led(&self, color: u8, blinks: u8, period: u16) {
         if blinks > 0 {
             let rgb = self.rgb.get_rgb();
             self.rgb.set_rgb(rgb ^ color);
-            self.edt.schedule(
-                DELAY_BLINK,
-                Action::Blink {
-                    color,
-                    blinks: blinks - 1,
-                },
-            );
+            let action = Action::Blink {
+                color,
+                blinks: blinks - 1,
+                period,
+            };
+            self.edt.schedule(period as u32, action);
         }
     }
 
-    pub fn check_buttons(&self, prev_plus: u32, prev_minus: u32) {
-        if self.plus_pin.is_down() {
-            if prev_plus == LONG_CLICK_THRESHOLD {
-                self.on_long_clicked();
-            }
-        } else {
-            if (1..LONG_CLICK_THRESHOLD).contains(&prev_plus) {
-                self.on_plus_clicked();
-            }
+    fn check_buttons(&self) {
+        match self.minus_pin.check_state(BUTTON_CHECK_PERIOD) {
+            Clicked => self.on_minus_clicked(),
+            LongClicked => self.on_long_clicked(),
+            Nothing => {}
         }
 
-        if self.minus_pin.is_down() {
-            if prev_minus == LONG_CLICK_THRESHOLD {
-                self.on_long_clicked();
-            }
-        } else {
-            if (1..LONG_CLICK_THRESHOLD).contains(&prev_minus) {
-                self.on_minus_clicked();
-            }
+        match self.plus_pin.check_state(BUTTON_CHECK_PERIOD) {
+            Clicked => self.on_plus_clicked(),
+            LongClicked => self.on_long_clicked(),
+            Nothing => {}
         }
 
-        let next_plus = if self.plus_pin.is_down() {
-            prev_plus + 1
-        } else {
-            0
-        };
-        let next_minus = if self.minus_pin.is_down() {
-            prev_minus + 1
-        } else {
-            0
-        };
+        match self.toggle_pin.check_state(BUTTON_CHECK_PERIOD) {
+            Clicked => self.on_toggle_clicked(),
+            LongClicked => {}
+            Nothing => {}
+        }
 
-        self.edt.schedule(
-            DELAY_CHECK_BUTTONS,
-            CheckButtons {
-                prev_plus: next_plus,
-                prev_minus: next_minus,
-            },
-        );
-    }
-
-    pub fn start(&self) {
-        self.check_buttons(0, 0);
-        self.handle_joystick();
+        self.edt.schedule(BUTTON_CHECK_PERIOD, CheckButtons);
     }
 
     fn on_plus_clicked(&self) {
-        if self.led_level.get() == 0 {
-            self.set_led_level_with_animation(4, linear_steps);
+        if self.power_level.get() == 0 {
+            self.set_power_level(4);
             self.blink(GREEN, 9, DELAY_BLINK / 2);
-        } else if self.led_level.get() < PWM_POWER_LEVEL {
-            self.increment_led_level(1);
+        } else if self.power_level.get() < MAX_POWER_LEVEL {
+            self.increment_power_level();
             self.blink(GREEN, 5, DELAY_BLINK);
         } else {
             self.indicate_nop();
@@ -155,11 +198,11 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
     }
 
     fn on_minus_clicked(&self) {
-        if self.led_level.get() == 0 {
-            self.set_led_level_with_animation(2, linear_steps);
+        if self.power_level.get() == 0 {
+            self.set_power_level(2);
             self.blink(GREEN, 9, DELAY_BLINK / 2);
-        } else if self.led_level.get() > 1 {
-            self.decrement_led_level(1);
+        } else if self.power_level.get() > 1 {
+            self.decrement_power_level();
             self.blink(RED, 5, DELAY_BLINK);
         } else {
             self.indicate_nop();
@@ -167,13 +210,19 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
     }
 
     fn on_long_clicked(&self) {
-        if self.led_level.get() == 0 {
-            self.set_led_level_with_animation(1, linear_steps);
+        if self.power_level.get() == 0 {
+            self.set_power_level(1);
             self.blink(BLUE, 3, DELAY_BLINK / 2);
         } else {
-            self.set_led_level_with_animation(0, linear_steps);
+            self.set_power_level(0);
             self.blink(RED, 9, DELAY_BLINK / 2);
         }
+    }
+
+    fn on_toggle_clicked(&self) {
+        self.blink(GREEN, 5, DELAY_BLINK / 4);
+        self.high_beam.set(!self.high_beam.get());
+        self.set_power_level(self.power_level.get());
     }
 
     fn remove_blinks(&self) {
@@ -181,19 +230,21 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
             Action::Blink {
                 color: _,
                 blinks: _,
+                period: _,
             } => true,
             _ => false,
         });
     }
 
-    fn blink(&self, color: u8, times: u32, period: u32) {
+    fn blink(&self, color: u8, times: u8, period: u16) {
         self.rgb.set_rgb(color);
         self.remove_blinks();
         self.edt.schedule(
-            period,
+            period as u32,
             Action::Blink {
                 color,
                 blinks: times,
+                period,
             },
         );
     }
@@ -202,65 +253,65 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
         self.blink(BLUE, 1, 500);
     }
 
-    fn increment_led_level(&self, inc: usize) {
-        self.change_led_level(inc, true);
-    }
-
-    fn decrement_led_level(&self, dec: usize) {
-        self.change_led_level(dec, false);
-    }
-
-    fn change_led_level(&self, change: usize, inc: bool) {
-        let current = self.led_level.get();
-        if inc && current == PWM_POWER_LEVEL {
-            return;
-        }
-        if !inc && current == 0 {
-            return;
-        }
-
-        let new_level = if inc {
-            current + change
-        } else {
-            current - change
-        };
-
-        self.set_led_level_with_animation(new_level, linear_steps);
-    }
-
-    fn set_led_level_with_animation(
-        &self,
-        new_level: usize,
-        animation: fn(u32, u32) -> [u32; ANIM_SIZE],
-    ) {
-        self.led_level.set(new_level);
-
-        // animation
-        self.remove_set_power_level_messages();
-
-        let current_power_level = self.led.get();
-        let goal = POWER_LEVELS[new_level];
-
-        let steps = animation(current_power_level, goal);
-        for i in 0..ANIM_SIZE {
-            self.edt.schedule(
-                ANIM_STEP * i as u32,
-                SetPwm {
-                    power_level: steps[i],
-                },
-            );
+    fn increment_power_level(&self) {
+        let current = self.power_level.get();
+        if current < MAX_POWER_LEVEL {
+            self.set_power_level(current + 1);
         }
     }
 
-    fn remove_set_power_level_messages(&self) {
+    fn decrement_power_level(&self) {
+        let current = self.power_level.get();
+        if current > 0 {
+            self.set_power_level(current - 1);
+        }
+    }
+
+    fn set_power_level(&self, new_level: usize) {
+        self.power_level.set(new_level);
         self.edt.remove(|msg| match msg {
-            Action::SetPwm { power_level: _ } => true,
+            Action::SetPwm {
+                start: _,
+                end: _,
+                i: _,
+                high_beam: _,
+            } => true,
             _ => false,
         });
+        if self.high_beam.get() {
+            self.animate_high_beam(POWER_LEVELS_HIGH[new_level]);
+            self.animate_low_beam(POWER_LEVELS_LOW_AUX[new_level]);
+        } else {
+            self.animate_high_beam(POWER_LEVELS_HIGH_AUX[new_level]);
+            self.animate_low_beam(POWER_LEVELS_LOW[new_level]);
+        };
     }
 
-    pub fn set_power_level(&self, power_level: u32) {
-        self.led.set(power_level);
+    fn animate_high_beam(&self, end: u8) {
+        self.continue_led_animation(self.led_high.get() as u8, end, 0, true);
+    }
+
+    fn animate_low_beam(&self, end: u8) {
+        self.continue_led_animation(self.led.get() as u8, end, 0, false);
+    }
+
+    /// Calculates the pwm level for the given i, sets it and schedules the next step
+    fn continue_led_animation(&self, start: u8, end: u8, i: usize, high_beam: bool) {
+        let led = if high_beam { self.led_high } else { self.led };
+        let diff = end as i32 - start as i32;
+        let next_value = start as i32 + (diff * (i as i32) / ANIM_SIZE as i32);
+        debug_assert!(next_value >= 0);
+        led.set(next_value as u32);
+
+        if i < ANIM_SIZE {
+            let action = SetPwm {
+                start,
+                end,
+                i: i + 1,
+                high_beam,
+            };
+            self.edt.schedule(ANIM_STEP, action);
+        }
     }
 
     fn handle_joystick(&self) {
@@ -287,59 +338,5 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
             }
         }
         self.edt.schedule(50, CheckJoystick);
-    }
-}
-
-fn linear_steps(from: u32, to: u32) -> [u32; ANIM_SIZE] {
-    let mut x = [1234; ANIM_SIZE];
-
-    let diff = to as i32 - from as i32;
-
-    for i in 0..ANIM_SIZE as i32 {
-        let next_value = from as i32 + (diff * (i + 1) / ANIM_SIZE as i32);
-        debug_assert!(next_value >= 0);
-        x[i as usize] = next_value as u32;
-    }
-    return x;
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::control::linear_steps;
-
-    #[test]
-    fn linear_step_up() {
-        let steps = linear_steps(0, 20);
-        assert_eq!(
-            steps,
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-        );
-    }
-
-    #[test]
-    fn linear_step_up_big() {
-        let steps = linear_steps(0, 40);
-        assert_eq!(
-            steps,
-            [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40]
-        );
-    }
-
-    #[test]
-    fn linear_step_down() {
-        let steps = linear_steps(60, 80);
-        assert_eq!(
-            steps,
-            [61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]
-        );
-    }
-
-    #[test]
-    fn linear_step_down_big() {
-        let steps = linear_steps(80, 0);
-        assert_eq!(
-            steps,
-            [76, 72, 68, 64, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8, 4, 0]
-        );
     }
 }

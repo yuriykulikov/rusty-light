@@ -1,18 +1,28 @@
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
+    use std::mem::size_of_val;
 
     use light_control::bsp::joystick::Joystick;
     use light_control::bsp::led::{Led, MAX};
     use light_control::bsp::pin::Pin;
     use light_control::bsp::rgb::Rgb;
-    use light_control::control::{ANIM_DURATION, DELAY_CHECK_BUTTONS, LightControl, POWER_LEVELS};
+    use light_control::control::{
+        Action, LightControl, ANIM_DURATION, BUTTON_CHECK_PERIOD, MAX_POWER_LEVEL, POWER_LEVELS_LOW,
+    };
     use light_control::edt::EDT;
+
+    #[test]
+    fn edt_queue_size_is_below_1kb() {
+        let edt = EDT::<Action>::create();
+        println!("The useful size of `v` is {}", size_of_val(&edt.queue));
+        assert!(size_of_val(&edt.queue) < 500);
+    }
 
     #[test]
     fn starting_brightness_is_50() {
         with_bench(&|_advance_time, _buttons, power_level| {
-            assert_eq!(power_level.get(), 50);
+            assert_eq!(power_level.get(), low(2));
         });
     }
 
@@ -20,10 +30,10 @@ mod tests {
     fn plus_increases_brightness() {
         with_bench(&|advance_time, buttons, power_level| {
             buttons.click_plus();
-            assert_eq!(power_level.get(), 75);
+            assert_eq!(power_level.get(), low(3));
             advance_time(1000);
             buttons.click_plus();
-            assert_eq!(power_level.get(), 100);
+            assert_eq!(power_level.get(), low(4));
         });
     }
 
@@ -34,7 +44,7 @@ mod tests {
                 buttons.click_plus();
                 advance_time(1000);
             }
-            assert_eq!(power_level.get(), 100);
+            assert_eq!(power_level.get(), low(MAX_POWER_LEVEL));
         });
     }
 
@@ -43,14 +53,14 @@ mod tests {
         with_bench(&|_advance_time, buttons, power_level| {
             buttons.click_plus();
             buttons.click_plus();
-            assert_eq!(power_level.get(), 100);
+            assert_eq!(power_level.get(), low(4));
 
             buttons.click_minus();
-            assert_eq!(power_level.get(), 75);
+            assert_eq!(power_level.get(), low(3));
             buttons.click_minus();
-            assert_eq!(power_level.get(), 50);
+            assert_eq!(power_level.get(), low(2));
             buttons.click_minus();
-            assert_eq!(power_level.get(), 20);
+            assert_eq!(power_level.get(), low(1));
         });
     }
 
@@ -61,7 +71,7 @@ mod tests {
             buttons.click_minus();
             buttons.click_minus();
             buttons.click_minus();
-            assert_eq!(power_level.get(), 20);
+            assert_eq!(power_level.get(), low(1));
         });
     }
 
@@ -91,9 +101,13 @@ mod tests {
                 advance_time(700);
                 buttons.release_plus();
                 advance_time(100 + ANIM_DURATION);
-                assert_eq!(power_level.get(), POWER_LEVELS[i]);
+                assert_eq!(power_level.get(), low(i));
             }
         });
+    }
+
+    fn low(i: usize) -> u32 {
+        POWER_LEVELS_LOW[i] as u32
     }
 
     fn with_bench(block: &dyn Fn(&dyn Fn(u32), Buttons, &Cell<u32>)) {
@@ -112,8 +126,12 @@ mod tests {
         let edt = EDT::create();
         let light_control = LightControl::new(
             TestPin { is_down: &plus_pin },
-            TestPin { is_down: &minus_pin },
-            TestPin { is_down: &toggle_pin },
+            TestPin {
+                is_down: &minus_pin,
+            },
+            TestPin {
+                is_down: &toggle_pin,
+            },
             TestJoystick {},
             &led,
             &led_high,
@@ -197,11 +215,11 @@ mod tests {
             self.plus_pin.set(false);
         }
         fn click_plus(&self) {
-            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
             self.press_plus();
-            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
             self.release_plus();
-            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
             (self.advance_time)(ANIM_DURATION);
         }
         fn press_minus(&self) {
@@ -211,19 +229,19 @@ mod tests {
             self.minus_pin.set(false);
         }
         fn click_minus(&self) {
-            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
             self.press_minus();
-            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
             self.release_minus();
-            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
             (self.advance_time)(ANIM_DURATION);
         }
         fn long_click_plus(&self) {
-            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
             self.press_plus();
             (self.advance_time)(1500);
             self.release_plus();
-            (self.advance_time)(DELAY_CHECK_BUTTONS);
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
             (self.advance_time)(ANIM_DURATION);
         }
     }
