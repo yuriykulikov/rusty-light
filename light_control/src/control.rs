@@ -37,7 +37,7 @@ pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 20, 30, 40, 50];
 
 pub const MAX_POWER_LEVEL: usize = POWER_LEVELS_LOW.len() - 1;
 pub const ANIM_DURATION: u32 = 500;
-const ANIM_SIZE: usize = 20;
+const ANIM_SIZE: usize = (60 * ANIM_DURATION / 1000) as usize;
 const ANIM_STEP: u32 = ANIM_DURATION / ANIM_SIZE as u32;
 
 enum ButtonState {
