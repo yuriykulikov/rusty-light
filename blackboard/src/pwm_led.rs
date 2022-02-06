@@ -34,8 +34,6 @@ impl<PWM: hal::PwmPin<Duty = u16>> Led for PwmLed<PWM> {
         self.state.set(pwm);
         let duty_cycle = self.duties[pwm as usize];
         self.pwm_ch.borrow_mut().set_duty(duty_cycle);
-        let mut output = jlink_rtt::NonBlockingOutput::new();
-        writeln!(output, "{}% -> {}", pwm, duty_cycle).unwrap();
     }
 
     fn get(&self) -> u32 {

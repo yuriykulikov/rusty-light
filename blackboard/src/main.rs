@@ -50,8 +50,8 @@ fn main() -> ! {
     let mut timer = dp.TIM17.timer(&mut rcc);
     let edt = EDT::create();
     let pwm = dp.TIM1.pwm(16000.hz(), &mut rcc);
-    let mut led = PwmLed::create(pwm.bind_pin(gpiob.pb3));
-    let mut led_high = PwmLed::create(pwm.bind_pin(gpioa.pa8));
+    let led = PwmLed::create(pwm.bind_pin(gpiob.pb3));
+    let led_high = PwmLed::create(pwm.bind_pin(gpioa.pa8));
     let mut rgb = GpioRgb {
         pin: RefCell::new(gpioc.pc6.into_push_pull_output()),
         state: Cell::new(0),
@@ -77,8 +77,8 @@ fn main() -> ! {
             pin: gpiob.pb4.into_pull_up_input(),
         },
         AdcJoystick::create(gpioa.pa0.into_analog(), gpioa.pa1.into_analog(), adc),
-        &mut led,
-        &mut led_high,
+        &led,
+        &led_high,
         &mut rgb,
         &edt,
     );
@@ -86,11 +86,16 @@ fn main() -> ! {
     light_control.start();
     light_control.jump_start();
 
+    let mut prev_logged_state = (0, 0);
     loop {
         match edt.poll() {
             Event::Execute { msg } => {
                 watchdog.feed();
                 light_control.process_message(msg);
+                if prev_logged_state != (led_high.get(), led.get()) {
+                    writeln!(output, "high: {}%, low: {}%", led_high.get(), led.get()).unwrap();
+                    prev_logged_state = (led_high.get(), led.get());
+                }
             }
             Event::Wait { ms } => {
                 timer.start(ms.ms());

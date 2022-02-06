@@ -15,7 +15,6 @@ mod tests {
     #[test]
     fn edt_queue_size_is_below_1kb() {
         let edt = EDT::<Action>::create();
-        println!("The useful size of `v` is {}", size_of_val(&edt.queue));
         assert!(size_of_val(&edt.queue) < 500);
     }
 
@@ -144,10 +143,14 @@ mod tests {
             light_control.process_message(msg);
         });
 
+        let prev_led = Cell::new(0);
         let advance_time = |time: u32| {
             edt.advance_time_by(time, &|msg| {
                 light_control.process_message(msg);
-                render_flashlight_state(led.get(), rgb.get_rgb());
+                if prev_led.get() != led.get() {
+                    render_flashlight_state(led.get(), rgb.get_rgb());
+                }
+                prev_led.set(led.get());
             });
         };
 

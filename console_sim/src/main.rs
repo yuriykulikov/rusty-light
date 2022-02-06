@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::io;
 use std::io::Stdout;
 use std::thread::sleep;
@@ -57,6 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
+    let prev_drawn_state: Cell<(u32, u32, u8)> = Cell::new((0, 0, 0));
     loop {
         if esc_pin.is_down() {
             edt.exit();
@@ -69,8 +71,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
         }
-
-        draw_tui(&mut terminal, led.get(), led_high.get(), rgb.get_rgb())?;
+        let state_to_draw: (u32, u32, u8) = (led.get(), led_high.get(), rgb.get_rgb());
+        if prev_drawn_state.get() != state_to_draw {
+            draw_tui(&mut terminal, led.get(), led_high.get(), rgb.get_rgb())?;
+        }
+        prev_drawn_state.set(state_to_draw);
     }
 
     disable_raw_mode().expect("can go back to normal");
