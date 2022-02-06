@@ -5,6 +5,14 @@ use stm_hal::analog::adc::Adc;
 use crate::hal::adc::Channel;
 use light_control::bsp::joystick::Joystick;
 
+pub struct NopJoystick {}
+
+impl Joystick for NopJoystick {
+    fn read(&self) -> (i32, i32) {
+        (50, 50)
+    }
+}
+
 pub struct AdcJoystick<PinV: Channel<Adc, ID = u8>, PinH: Channel<Adc, ID = u8>> {
     adc_pin_v: RefCell<PinV>,
     adc_pin_h: RefCell<PinH>,

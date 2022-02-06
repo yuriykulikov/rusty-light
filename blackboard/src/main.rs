@@ -2,11 +2,6 @@
 #![cfg_attr(not(test), no_std)]
 #![no_main]
 
-mod button;
-mod joystick;
-mod pwm_led;
-mod rgb;
-
 extern crate cortex_m;
 extern crate cortex_m_rt as rt;
 extern crate jlink_rtt;
@@ -23,12 +18,20 @@ use stm_hal::analog::adc::{Adc, OversamplingRatio, Precision, SampleTime};
 use stm_hal::prelude::*;
 use stm_hal::{hal, stm32};
 
-use crate::button::PullUpButton;
-use crate::joystick::AdcJoystick;
+use light_control::bsp::joystick::Joystick;
+use light_control::bsp::led::Led;
+use light_control::control::{LightControl, LightControlLoop};
+use light_control::edt::{Event, EDT};
+
+use crate::button::{NopButton, PullUpButton};
+use crate::joystick::{AdcJoystick, NopJoystick};
 use crate::pwm_led::PwmLed;
 use crate::rgb::GpioRgb;
-use light_control::control::LightControl;
-use light_control::edt::{Event, EDT};
+
+mod button;
+mod joystick;
+mod pwm_led;
+mod rgb;
 
 #[entry]
 fn main() -> ! {
@@ -57,26 +60,37 @@ fn main() -> ! {
         state: Cell::new(0),
     };
 
-    let mut adc: Adc = dp.ADC.constrain(&mut rcc);
-    adc.set_sample_time(SampleTime::T_80);
-    adc.set_precision(Precision::B_12);
-    adc.set_oversampling_ratio(OversamplingRatio::X_16);
-    adc.set_oversampling_shift(16);
-    adc.oversampling_enable(true);
-    cp.SYST.delay(&mut rcc).delay(20.us());
-    adc.calibrate();
-
+    // let mut adc: Adc = dp.ADC.constrain(&mut rcc);
+    // adc.set_sample_time(SampleTime::T_80);
+    // adc.set_precision(Precision::B_12);
+    // adc.set_oversampling_ratio(OversamplingRatio::X_16);
+    // adc.set_oversampling_shift(16);
+    // adc.oversampling_enable(true);
+    // cp.SYST.delay(&mut rcc).delay(20.us());
+    // adc.calibrate();
+    // let light_control = LightControl::new(
+    //     NopButton {},
+    //     NopButton {},
+    //     PullUpButton {
+    //         pin: gpiob.pb4.into_pull_up_input(),
+    //     },
+    //     AdcJoystick::create(gpioa.pa0.into_analog(), gpioa.pa1.into_analog(), adc),
+    //     &mut led,
+    //     &mut led_high,
+    //     &mut rgb,
+    //     &edt,
+    // );
     let light_control = LightControl::new(
-        PullUpButton {
-            pin: gpiob.pb5.into_pull_up_input(),
-        },
-        PullUpButton {
-            pin: gpiob.pb9.into_pull_up_input(),
-        },
         PullUpButton {
             pin: gpiob.pb4.into_pull_up_input(),
         },
-        AdcJoystick::create(gpioa.pa0.into_analog(), gpioa.pa1.into_analog(), adc),
+        PullUpButton {
+            pin: gpioa.pa1.into_pull_up_input(),
+        },
+        PullUpButton {
+            pin: gpioa.pa0.into_pull_up_input(),
+        },
+        NopJoystick {},
         &led,
         &led_high,
         &mut rgb,
