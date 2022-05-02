@@ -29,11 +29,13 @@ pub const BUTTON_CHECK_PERIOD: u32 = 50;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000;
 pub const DELAY_BLINK: u16 = 100;
 
-pub const POWER_LEVELS_HIGH: &'static [u8] = &[0, 20, 50, 75, 90];
-pub const POWER_LEVELS_HIGH_AUX: &'static [u8] = &[0, 0, 0, 10, 15];
+pub const POWER_LEVELS_LOW: &'static [u8] =     &[0, 40, 60, 80, 100];
+pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 40, 50, 70, 100];
 
-pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 20, 50, 75, MAX as u8];
-pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 20, 30, 40, 50];
+pub const POWER_LEVELS_HIGH: &'static [u8] = &[0, 55, 70, 85, 100];
+pub const POWER_LEVELS_HIGH_AUX: &'static [u8] = &[0, 0, 0, 0, 35];
+
+pub const POWER_LEVEL_INIT: usize = 3;
 
 pub const MAX_POWER_LEVEL: usize = POWER_LEVELS_LOW.len() - 1;
 pub const ANIM_DURATION: u32 = 500;
@@ -127,7 +129,7 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
     }
 
     pub fn jump_start(&self) {
-        self.set_power_level(2);
+        self.set_power_level(POWER_LEVEL_INIT);
     }
 
     pub fn process_message(&self, action: Action) {

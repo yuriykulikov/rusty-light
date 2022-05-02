@@ -20,7 +20,7 @@ use stm_hal::{hal, stm32};
 
 use light_control::bsp::joystick::Joystick;
 use light_control::bsp::led::Led;
-use light_control::control::{LightControl, LightControlLoop};
+use light_control::control::LightControl;
 use light_control::edt::{Event, EDT};
 
 use crate::button::{NopButton, PullUpButton};
