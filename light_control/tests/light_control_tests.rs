@@ -19,29 +19,25 @@ mod tests {
     }
 
     #[test]
-    fn starting_brightness_is_50() {
+    fn starting_brightness() {
         with_bench(&|_advance_time, _buttons, power_level| {
-            assert_eq!(power_level.get(), low(2));
+            assert_eq!(power_level.get(), low(3));
         });
     }
 
     #[test]
-    fn plus_increases_brightness() {
+    fn plus_click_increases_brightness() {
         with_bench(&|advance_time, buttons, power_level| {
-            buttons.click_plus();
-            assert_eq!(power_level.get(), low(3));
-            advance_time(1000);
             buttons.click_plus();
             assert_eq!(power_level.get(), low(4));
         });
     }
 
     #[test]
-    fn plus_increases_brightness_up_to_100() {
+    fn plus_lick_increases_brightness_until_max_reached() {
         with_bench(&|advance_time, buttons, power_level| {
             for _ in 0..3 {
                 buttons.click_plus();
-                advance_time(1000);
             }
             assert_eq!(power_level.get(), low(MAX_POWER_LEVEL));
         });
@@ -50,7 +46,7 @@ mod tests {
     #[test]
     fn minus_decreases_brightness() {
         with_bench(&|_advance_time, buttons, power_level| {
-            buttons.click_plus();
+            // given brightness is max
             buttons.click_plus();
             assert_eq!(power_level.get(), low(4));
 
@@ -64,7 +60,7 @@ mod tests {
     }
 
     #[test]
-    fn minus_decreases_brightness_until_20_percent() {
+    fn minus_decreases_brightness_until_min_reached() {
         with_bench(&|_advance_time, buttons, power_level| {
             buttons.click_minus();
             buttons.click_minus();
@@ -83,11 +79,11 @@ mod tests {
     }
 
     #[test]
-    fn when_off_minus_button_clicks_switch_on_to_50() {
+    fn when_off_minus_button_clicks_switches_on() {
         with_bench(&|_advance_time, buttons, power_level| {
             buttons.long_click_plus();
             buttons.click_minus();
-            assert_eq!(power_level.get(), 50);
+            assert_eq!(power_level.get(), low(2));
         });
     }
 
@@ -95,13 +91,24 @@ mod tests {
     #[test]
     fn longer_clicks_have_effect_when_released() {
         with_bench(&|advance_time, buttons, power_level| {
-            for i in 3..4 {
-                buttons.press_plus();
-                advance_time(700);
-                buttons.release_plus();
-                advance_time(100 + ANIM_DURATION);
-                assert_eq!(power_level.get(), low(i));
-            }
+            assert_eq!(power_level.get(), low(3));
+            buttons.press_minus();
+            advance_time(700);
+            buttons.release_minus();
+            advance_time(100 + ANIM_DURATION);
+            assert_eq!(power_level.get(), low(2));
+
+            buttons.press_plus();
+            advance_time(700);
+            buttons.release_plus();
+            advance_time(100 + ANIM_DURATION);
+            assert_eq!(power_level.get(), low(3));
+
+            buttons.press_plus();
+            advance_time(700);
+            buttons.release_plus();
+            advance_time(100 + ANIM_DURATION);
+            assert_eq!(power_level.get(), low(4));
         });
     }
 
@@ -174,7 +181,6 @@ mod tests {
         for _ in 0..(MAX - power_level) {
             led_str.push(' ');
         }
-        println!("  [{}]  [{}]", led_str, rgb);
     }
 
     struct TestPin<'a> {

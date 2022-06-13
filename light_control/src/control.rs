@@ -1,7 +1,7 @@
 use no_std_compat::cell::Cell;
 
 use crate::bsp::joystick::Joystick;
-use crate::bsp::led::{Led, MAX};
+use crate::bsp::led::Led;
 use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
 use crate::control::Action::{CheckButtons, CheckJoystick, SetPwm};
@@ -29,7 +29,7 @@ pub const BUTTON_CHECK_PERIOD: u32 = 50;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000;
 pub const DELAY_BLINK: u16 = 100;
 
-pub const POWER_LEVELS_LOW: &'static [u8] =     &[0, 40, 60, 80, 100];
+pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 40, 60, 80, 100];
 pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 40, 50, 70, 100];
 
 pub const POWER_LEVELS_HIGH: &'static [u8] = &[0, 55, 70, 85, 100];
