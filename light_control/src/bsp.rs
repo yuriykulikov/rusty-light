@@ -26,9 +26,3 @@ pub mod led {
         fn get(&self) -> u32;
     }
 }
-
-pub mod joystick {
-    pub trait Joystick {
-        fn read(&self) -> (i32, i32);
-    }
-}

@@ -3,7 +3,6 @@ mod tests {
     use std::cell::Cell;
     use std::mem::size_of_val;
 
-    use light_control::bsp::joystick::Joystick;
     use light_control::bsp::led::{Led, MAX};
     use light_control::bsp::pin::Pin;
     use light_control::bsp::rgb::Rgb;
@@ -27,7 +26,7 @@ mod tests {
 
     #[test]
     fn plus_click_increases_brightness() {
-        with_bench(&|advance_time, buttons, power_level| {
+        with_bench(&|_advance_time, buttons, power_level| {
             buttons.click_plus();
             assert_eq!(power_level.get(), low(4));
         });
@@ -35,7 +34,7 @@ mod tests {
 
     #[test]
     fn plus_lick_increases_brightness_until_max_reached() {
-        with_bench(&|advance_time, buttons, power_level| {
+        with_bench(&|_advance_time, buttons, power_level| {
             for _ in 0..3 {
                 buttons.click_plus();
             }
@@ -138,7 +137,6 @@ mod tests {
             TestPin {
                 is_down: &toggle_pin,
             },
-            TestJoystick {},
             &led,
             &led_high,
             &rgb,
@@ -173,7 +171,7 @@ mod tests {
         );
     }
 
-    fn render_flashlight_state(power_level: u32, rgb: u8) {
+    fn render_flashlight_state(power_level: u32, _rgb: u8) {
         let mut led_str = String::new();
         for _ in 0..power_level {
             led_str.push('*');
@@ -266,14 +264,6 @@ mod tests {
         }
         fn get_rgb(&self) -> u8 {
             return self.rgb.get();
-        }
-    }
-
-    struct TestJoystick {}
-
-    impl Joystick for TestJoystick {
-        fn read(&self) -> (i32, i32) {
-            (0, 0)
         }
     }
 }

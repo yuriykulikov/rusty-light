@@ -14,22 +14,18 @@ use core::fmt::Write;
 
 use nb::block;
 use rt::{entry, exception, ExceptionFrame};
-use stm_hal::analog::adc::{Adc, OversamplingRatio, Precision, SampleTime};
 use stm_hal::prelude::*;
 use stm_hal::{hal, stm32};
 
-use light_control::bsp::joystick::Joystick;
 use light_control::bsp::led::Led;
 use light_control::control::LightControl;
 use light_control::edt::{Event, EDT};
 
-use crate::button::{NopButton, PullUpButton};
-use crate::joystick::{AdcJoystick, NopJoystick};
+use crate::button::PullUpButton;
 use crate::pwm_led::PwmLed;
 use crate::rgb::GpioRgb;
 
 mod button;
-mod joystick;
 mod pwm_led;
 mod rgb;
 
@@ -40,7 +36,6 @@ fn main() -> ! {
 
     // https://github.com/stm32-rs/stm32g0xx-hal
     let dp = stm32::Peripherals::take().expect("cannot take peripherals");
-    let cp = stm32::CorePeripherals::take().expect("cannot take core peripherals");
     let mut rcc = dp.RCC.constrain();
 
     let gpioa = dp.GPIOA.split(&mut rcc);
@@ -52,34 +47,15 @@ fn main() -> ! {
 
     let mut timer = dp.TIM17.timer(&mut rcc);
     let edt = EDT::create();
+    // 16 Khz is not very efficient, but also is not audible
     let pwm = dp.TIM1.pwm(16000.hz(), &mut rcc);
-    let led = PwmLed::create(pwm.bind_pin(gpiob.pb3));
+    let led_low = PwmLed::create(pwm.bind_pin(gpiob.pb3));
     let led_high = PwmLed::create(pwm.bind_pin(gpioa.pa8));
-    let mut rgb = GpioRgb {
+    let rgb = GpioRgb {
         pin: RefCell::new(gpioc.pc6.into_push_pull_output()),
         state: Cell::new(0),
     };
 
-    // let mut adc: Adc = dp.ADC.constrain(&mut rcc);
-    // adc.set_sample_time(SampleTime::T_80);
-    // adc.set_precision(Precision::B_12);
-    // adc.set_oversampling_ratio(OversamplingRatio::X_16);
-    // adc.set_oversampling_shift(16);
-    // adc.oversampling_enable(true);
-    // cp.SYST.delay(&mut rcc).delay(20.us());
-    // adc.calibrate();
-    // let light_control = LightControl::new(
-    //     NopButton {},
-    //     NopButton {},
-    //     PullUpButton {
-    //         pin: gpiob.pb4.into_pull_up_input(),
-    //     },
-    //     AdcJoystick::create(gpioa.pa0.into_analog(), gpioa.pa1.into_analog(), adc),
-    //     &mut led,
-    //     &mut led_high,
-    //     &mut rgb,
-    //     &edt,
-    // );
     let light_control = LightControl::new(
         PullUpButton {
             pin: gpiob.pb4.into_pull_up_input(),
@@ -90,10 +66,9 @@ fn main() -> ! {
         PullUpButton {
             pin: gpioa.pa0.into_pull_up_input(),
         },
-        NopJoystick {},
-        &led,
+        &led_low,
         &led_high,
-        &mut rgb,
+        &rgb,
         &edt,
     );
 
@@ -106,9 +81,9 @@ fn main() -> ! {
             Event::Execute { msg } => {
                 watchdog.feed();
                 light_control.process_message(msg);
-                if prev_logged_state != (led_high.get(), led.get()) {
-                    writeln!(output, "high: {}%, low: {}%", led_high.get(), led.get()).unwrap();
-                    prev_logged_state = (led_high.get(), led.get());
+                if prev_logged_state != (led_high.get(), led_low.get()) {
+                    writeln!(output, "high: {}%, low: {}%", led_high.get(), led_low.get()).unwrap();
+                    prev_logged_state = (led_high.get(), led_low.get());
                 }
             }
             Event::Wait { ms } => {

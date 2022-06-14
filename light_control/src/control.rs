@@ -1,10 +1,9 @@
 use no_std_compat::cell::Cell;
 
-use crate::bsp::joystick::Joystick;
 use crate::bsp::led::Led;
 use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
-use crate::control::Action::{CheckButtons, CheckJoystick, SetPwm};
+use crate::control::Action::{CheckButtons, SetPwm};
 use crate::control::ButtonState::{Clicked, LongClicked, Nothing};
 use crate::edt::EDT;
 
@@ -16,7 +15,6 @@ pub enum Action {
         period: u16,
     },
     CheckButtons,
-    CheckJoystick,
     SetPwm {
         start: u8,
         end: u8,
@@ -74,26 +72,23 @@ impl<P: Pin> StatefulButton<P> {
 }
 
 /// Control logic evaluates button states and changes the light intensity
-pub struct LightControl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> {
+pub struct LightControl<'a, P: Pin, M: Pin, T: Pin> {
     plus_pin: StatefulButton<P>,
     minus_pin: StatefulButton<M>,
     toggle_pin: StatefulButton<T>,
-    joystick: J,
     led: &'a dyn Led,
     led_high: &'a dyn Led,
     high_beam: Cell<bool>,
     rgb: &'a dyn Rgb,
     edt: &'a EDT<Action>,
     power_level: Cell<usize>,
-    furthest_stick_position: Cell<(i32, i32)>,
 }
 
-impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
+impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     pub fn new(
         plus_pin: P,
         minus_pin: M,
         toggle_pin: T,
-        joystick: J,
         led: &'a dyn Led,
         led_high: &'a dyn Led,
         rgb: &'a dyn Rgb,
@@ -112,20 +107,17 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
                 pin: toggle_pin,
                 hold_time: Cell::new(0),
             },
-            joystick,
             led,
             led_high,
             high_beam: Cell::new(false),
             rgb,
             edt,
             power_level: Cell::new(0),
-            furthest_stick_position: Cell::new((0, 0)),
         };
     }
 
     pub fn start(&self) {
         self.check_buttons();
-        self.handle_joystick();
     }
 
     pub fn jump_start(&self) {
@@ -135,7 +127,6 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
     pub fn process_message(&self, action: Action) {
         match action {
             Action::CheckButtons => self.check_buttons(),
-            Action::CheckJoystick => self.handle_joystick(),
             Action::Blink {
                 color,
                 blinks,
@@ -314,31 +305,5 @@ impl<'a, P: Pin, M: Pin, T: Pin, J: Joystick> LightControl<'a, P, M, T, J> {
             };
             self.edt.schedule(ANIM_STEP, action);
         }
-    }
-
-    fn handle_joystick(&self) {
-        fn manhattan(point: (i32, i32)) -> u32 {
-            (point.0.abs() + point.1.abs()) as u32
-        }
-        let point = self.joystick.read();
-        let prev_point = self.furthest_stick_position.get();
-        if manhattan(point) >= manhattan(prev_point) {
-            // increasing displacement
-            self.furthest_stick_position.set(point);
-        } else if manhattan(point) < 20 && manhattan(prev_point) > 30 {
-            self.furthest_stick_position.set((0, 0));
-            let (x, y) = prev_point;
-            let moved_along_x = x.abs() > y.abs();
-            if moved_along_x && x > 0 {
-                self.on_plus_clicked();
-            } else if moved_along_x {
-                self.on_minus_clicked();
-            } else if y < 0 {
-                self.on_minus_clicked();
-            } else {
-                self.on_plus_clicked();
-            }
-        }
-        self.edt.schedule(50, CheckJoystick);
     }
 }

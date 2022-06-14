@@ -44,7 +44,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         plus_pin,
         minus_pin,
         KeyboardPin::create(28),
-        joystick,
         &led,
         &led_high,
         &rgb,
