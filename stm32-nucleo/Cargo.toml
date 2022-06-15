@@ -4,7 +4,7 @@ authors = [
     "Yuriy Kulikov <yuriy.kulikov.87@gmail.com>"
 ]
 edition = "2018"
-name = "blackboard"
+name = "stm32-nucleo"
 version = "0.1.0"
 
 [dependencies]

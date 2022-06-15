@@ -1,2 +1,2 @@
-cd blackboard || exit
+cd stm32-nucleo || exit
 ./flash.sh
