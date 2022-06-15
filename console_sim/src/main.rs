@@ -20,7 +20,7 @@ use light_control::edt::{Event, EDT};
 
 use crate::dummy_led::DummyLed;
 use crate::dummy_rgb::DummyRgb;
-use crate::keyboard_pin::{DummyJoystick, KeyboardPin};
+use crate::keyboard_pin::KeyboardPin;
 
 mod dummy_led;
 mod dummy_rgb;
@@ -31,13 +31,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let led = DummyLed::create(0);
     let led_high = DummyLed::create(0);
     let rgb = DummyRgb::create();
-    let joystick = DummyJoystick {
-        left: KeyboardPin::create(105),
-        right: KeyboardPin::create(106),
-        up: KeyboardPin::create(103),
-        down: KeyboardPin::create(108),
-    };
-
     let edt = EDT::create();
 
     let light_control = LightControl::new(
@@ -154,9 +147,16 @@ fn draw_tui(
 #[cfg(target_os = "linux")]
 fn keys() -> (KeyboardPin, KeyboardPin, KeyboardPin) {
     return (
+        // ESC
         KeyboardPin::create(1),
-        KeyboardPin::create(109),
-        KeyboardPin::create(104),
+        // left
+        // KeyboardPin::create(105),
+        // right
+        // KeyboardPin::create(106),
+        // down
+        KeyboardPin::create(108),
+        // up
+        KeyboardPin::create(103),
     );
 }
 
