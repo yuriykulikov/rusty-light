@@ -7,7 +7,8 @@ mod tests {
     use light_control::bsp::pin::Pin;
     use light_control::bsp::rgb::Rgb;
     use light_control::control::{
-        Action, LightControl, ANIM_DURATION, BUTTON_CHECK_PERIOD, MAX_POWER_LEVEL, POWER_LEVELS_LOW,
+        Action, LightControl, ANIM_DURATION, BUTTON_CHECK_PERIOD, MAX_POWER_LEVEL,
+        POWER_LEVELS_HIGH, POWER_LEVELS_LOW, POWER_LEVELS_LOW_AUX,
     };
     use light_control::edt::EDT;
 
@@ -19,91 +20,128 @@ mod tests {
 
     #[test]
     fn starting_brightness() {
-        with_bench(&|advance_time, _buttons, power_level| {
+        with_bench(&|advance_time, _buttons, low_beam, _high_beam| {
             // startup animation
             advance_time(2000);
-            assert_eq!(power_level.get(), low(3));
+            assert_eq!(low_beam.get(), low(3));
         });
     }
 
     #[test]
     fn plus_click_increases_brightness() {
-        with_bench(&|_advance_time, buttons, power_level| {
+        with_bench(&|_advance_time, buttons, low_beam, _high_beam| {
             buttons.click_plus();
-            assert_eq!(power_level.get(), low(4));
+            assert_eq!(low_beam.get(), low(4));
         });
     }
 
     #[test]
-    fn plus_lick_increases_brightness_until_max_reached() {
-        with_bench(&|_advance_time, buttons, power_level| {
+    fn plus_click_increases_brightness_until_max_reached() {
+        with_bench(&|_advance_time, buttons, low_beam, _high_beam| {
             for _ in 0..3 {
                 buttons.click_plus();
             }
-            assert_eq!(power_level.get(), low(MAX_POWER_LEVEL));
+            assert_eq!(low_beam.get(), low(MAX_POWER_LEVEL));
         });
     }
 
     #[test]
-    fn minus_decreases_brightness() {
-        with_bench(&|_advance_time, buttons, power_level| {
+    fn minus_click_decreases_brightness() {
+        with_bench(&|_advance_time, buttons, low_beam, _high_beam| {
             // given brightness is max
             buttons.click_plus();
-            assert_eq!(power_level.get(), low(4));
+            assert_eq!(low_beam.get(), low(4));
 
             buttons.click_minus();
-            assert_eq!(power_level.get(), low(3));
+            assert_eq!(low_beam.get(), low(3));
             buttons.click_minus();
-            assert_eq!(power_level.get(), low(2));
+            assert_eq!(low_beam.get(), low(2));
             buttons.click_minus();
-            assert_eq!(power_level.get(), low(1));
+            assert_eq!(low_beam.get(), low(1));
         });
     }
 
     #[test]
-    fn minus_decreases_brightness_until_min_reached() {
-        with_bench(&|_advance_time, buttons, power_level| {
+    fn minus_click_decreases_brightness_until_min_reached() {
+        with_bench(&|_advance_time, buttons, low_beam, _high_beam| {
             buttons.click_minus();
             buttons.click_minus();
             buttons.click_minus();
             buttons.click_minus();
-            assert_eq!(power_level.get(), low(1));
-        });
-    }
-
-    #[test]
-    fn when_off_minus_button_clicks_switches_on() {
-        with_bench(&|_advance_time, buttons, power_level| {
-            buttons.long_click_plus();
-            buttons.click_minus();
-            assert_eq!(power_level.get(), low(2));
+            assert_eq!(low_beam.get(), low(1));
         });
     }
 
     /// Clicks here are below the longclick threshold, but they are longer than usual clicks
     #[test]
     fn longer_clicks_have_effect_when_released() {
-        with_bench(&|advance_time, buttons, power_level| {
+        with_bench(&|advance_time, buttons, low_beam, _high_beam| {
             // startup animation
             advance_time(2000);
-            assert_eq!(power_level.get(), low(3));
+            assert_eq!(low_beam.get(), low(3));
             buttons.press_minus();
             advance_time(700);
             buttons.release_minus();
             advance_time(100 + ANIM_DURATION);
-            assert_eq!(power_level.get(), low(2));
+            assert_eq!(low_beam.get(), low(2));
 
             buttons.press_plus();
             advance_time(700);
             buttons.release_plus();
             advance_time(100 + ANIM_DURATION);
-            assert_eq!(power_level.get(), low(3));
+            assert_eq!(low_beam.get(), low(3));
+        });
+    }
 
-            buttons.press_plus();
-            advance_time(700);
-            buttons.release_plus();
-            advance_time(100 + ANIM_DURATION);
-            assert_eq!(power_level.get(), low(4));
+    #[test]
+    fn long_clicks_are_nop() {
+        with_bench(&|advance_time, buttons, low_beam, _high_beam| {
+            // startup animation
+            advance_time(2000);
+            assert_eq!(low_beam.get(), low(3));
+            buttons.long_click_plus();
+            buttons.long_click_minus();
+            buttons.long_click_toggle();
+            assert_eq!(low_beam.get(), low(3));
+        });
+    }
+
+    #[test]
+    fn toggle_click_switches_on_high_beam() {
+        with_bench(&|advance_time, buttons, low_beam, high_beam| {
+            // startup animation
+            advance_time(2000);
+            assert_eq!(low_beam.get(), low(3));
+            buttons.click_toggle();
+            assert_eq!(low_beam.get(), low_aux(3));
+            assert_eq!(high_beam.get(), high(3));
+        });
+    }
+
+    #[test]
+    fn plus_increases_high_beam_brightness() {
+        with_bench(&|advance_time, buttons, low_beam, high_beam| {
+            // startup animation
+            advance_time(2000);
+            buttons.click_toggle();
+            buttons.click_plus();
+            assert_eq!(low_beam.get(), low_aux(4));
+            assert_eq!(high_beam.get(), high(4));
+        });
+    }
+
+    #[test]
+    fn minus_decreases_high_beam_brightness() {
+        with_bench(&|advance_time, buttons, low_beam, high_beam| {
+            // startup animation
+            advance_time(2000);
+            buttons.click_toggle();
+            buttons.click_minus();
+            buttons.click_minus();
+            buttons.click_minus();
+            buttons.click_minus();
+            assert_eq!(low_beam.get(), low_aux(1));
+            assert_eq!(high_beam.get(), high(1));
         });
     }
 
@@ -116,17 +154,35 @@ mod tests {
         POWER_LEVELS_LOW[i] as u32
     }
 
-    fn with_bench(block: &dyn Fn(&dyn Fn(u32), Buttons, &Cell<u32>)) {
+    fn low_aux(i: usize) -> u32 {
+        assert!(
+            i < POWER_LEVELS_LOW_AUX.len(),
+            "Test level exceeds available levels: {}",
+            i
+        );
+        POWER_LEVELS_LOW_AUX[i] as u32
+    }
+
+    fn high(i: usize) -> u32 {
+        assert!(
+            i < POWER_LEVELS_HIGH.len(),
+            "Test level exceeds available levels: {}",
+            i
+        );
+        POWER_LEVELS_HIGH[i] as u32
+    }
+
+    fn with_bench(block: &dyn Fn(&dyn Fn(u32), Buttons, &Cell<u32>, &Cell<u32>)) {
         let plus_pin = Cell::new(false);
         let minus_pin = Cell::new(false);
         let toggle_pin = Cell::new(false);
-        let power_level = Cell::new(0);
-        let power_level_high = Cell::new(0);
+        let low_beam = Cell::new(0);
+        let high_beam = Cell::new(0);
         let led = TestLed {
-            power_output: &power_level,
+            power_output: &low_beam,
         };
         let led_high = TestLed {
-            power_output: &power_level_high,
+            power_output: &high_beam,
         };
         let rgb = TestRgb { rgb: Cell::new(0) };
         let edt = EDT::create();
@@ -168,16 +224,17 @@ mod tests {
                 toggle_pin: &toggle_pin,
                 advance_time: &advance_time,
             },
-            &power_level,
+            &low_beam,
+            &high_beam,
         );
     }
 
-    fn render_flashlight_state(power_level: u32, _rgb: u8) {
+    fn render_flashlight_state(low_beam: u32, _rgb: u8) {
         let mut led_str = String::new();
-        for _ in 0..power_level {
+        for _ in 0..low_beam {
             led_str.push('*');
         }
-        for _ in 0..(MAX - power_level) {
+        for _ in 0..(MAX - low_beam) {
             led_str.push(' ');
         }
     }
@@ -199,8 +256,8 @@ mod tests {
     }
 
     impl<'a> Led for TestLed<'a> {
-        fn set(&self, power_level: u32) {
-            self.power_output.set(power_level);
+        fn set(&self, low_beam: u32) {
+            self.power_output.set(low_beam);
         }
 
         fn get(&self) -> u32 {
@@ -230,6 +287,14 @@ mod tests {
             (self.advance_time)(BUTTON_CHECK_PERIOD);
             (self.advance_time)(ANIM_DURATION);
         }
+        fn long_click_plus(&self) {
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
+            self.press_plus();
+            (self.advance_time)(1500);
+            self.release_plus();
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
+            (self.advance_time)(ANIM_DURATION);
+        }
         fn press_minus(&self) {
             self.minus_pin.set(true);
         }
@@ -244,11 +309,33 @@ mod tests {
             (self.advance_time)(BUTTON_CHECK_PERIOD);
             (self.advance_time)(ANIM_DURATION);
         }
-        fn long_click_plus(&self) {
+        fn long_click_minus(&self) {
             (self.advance_time)(BUTTON_CHECK_PERIOD);
-            self.press_plus();
+            self.press_minus();
             (self.advance_time)(1500);
-            self.release_plus();
+            self.release_minus();
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
+            (self.advance_time)(ANIM_DURATION);
+        }
+        fn press_toggle(&self) {
+            self.toggle_pin.set(true);
+        }
+        fn release_toggle(&self) {
+            self.toggle_pin.set(false);
+        }
+        fn click_toggle(&self) {
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
+            self.press_toggle();
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
+            self.release_toggle();
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
+            (self.advance_time)(ANIM_DURATION);
+        }
+        fn long_click_toggle(&self) {
+            (self.advance_time)(BUTTON_CHECK_PERIOD);
+            self.press_toggle();
+            (self.advance_time)(1500);
+            self.release_toggle();
             (self.advance_time)(BUTTON_CHECK_PERIOD);
             (self.advance_time)(ANIM_DURATION);
         }
