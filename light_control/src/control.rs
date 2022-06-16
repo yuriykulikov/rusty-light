@@ -3,7 +3,6 @@ use no_std_compat::cell::Cell;
 use crate::bsp::led::Led;
 use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
-use crate::control::Action::{CheckButtons, SetPwm};
 use crate::control::ButtonState::{Clicked, LongClicked, Nothing};
 use crate::edt::EDT;
 
@@ -27,11 +26,9 @@ pub const BUTTON_CHECK_PERIOD: u32 = 50;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000;
 pub const DELAY_BLINK: u16 = 100;
 
-pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 40, 60, 80, 100];
-pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 40, 50, 70, 100];
-
-pub const POWER_LEVELS_HIGH: &'static [u8] = &[0, 55, 70, 85, 100];
-pub const POWER_LEVELS_HIGH_AUX: &'static [u8] = &[0, 0, 0, 0, 35];
+pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 25, 50, 75, 100];
+pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 25, 45, 60, 80];
+pub const POWER_LEVELS_HIGH: &'static [u8] = &[0, 60, 80, 90, 100];
 
 pub const POWER_LEVEL_INIT: usize = 3;
 
@@ -53,7 +50,6 @@ struct StatefulButton<P: Pin> {
 }
 
 impl<P: Pin> StatefulButton<P> {
-    // TODO what about mut?
     fn check_state(&self, elapsed_time: u32) -> ButtonState {
         let held = self.hold_time.get();
         let pin_down = self.pin.is_down();
@@ -71,6 +67,12 @@ impl<P: Pin> StatefulButton<P> {
     }
 }
 
+#[derive(Copy, Clone)]
+struct State {
+    power_level: usize,
+    high_beam: bool,
+}
+
 /// Control logic evaluates button states and changes the light intensity
 pub struct LightControl<'a, P: Pin, M: Pin, T: Pin> {
     plus_pin: StatefulButton<P>,
@@ -78,10 +80,9 @@ pub struct LightControl<'a, P: Pin, M: Pin, T: Pin> {
     toggle_pin: StatefulButton<T>,
     led: &'a dyn Led,
     led_high: &'a dyn Led,
-    high_beam: Cell<bool>,
     rgb: &'a dyn Rgb,
     edt: &'a EDT<Action>,
-    power_level: Cell<usize>,
+    state: Cell<State>,
 }
 
 impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
@@ -109,10 +110,12 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             },
             led,
             led_high,
-            high_beam: Cell::new(false),
             rgb,
             edt,
-            power_level: Cell::new(0),
+            state: Cell::new(State {
+                power_level: 0,
+                high_beam: false,
+            }),
         };
     }
 
@@ -121,7 +124,10 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     pub fn jump_start(&self) {
-        self.set_power_level(POWER_LEVEL_INIT);
+        self.change_state(State {
+            power_level: POWER_LEVEL_INIT,
+            high_beam: false,
+        });
     }
 
     pub fn process_message(&self, action: Action) {
@@ -175,14 +181,11 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             Nothing => {}
         }
 
-        self.edt.schedule(BUTTON_CHECK_PERIOD, CheckButtons);
+        self.edt.schedule(BUTTON_CHECK_PERIOD, Action::CheckButtons);
     }
 
     fn on_plus_clicked(&self) {
-        if self.power_level.get() == 0 {
-            self.set_power_level(4);
-            self.blink(GREEN, 9, DELAY_BLINK / 2);
-        } else if self.power_level.get() < MAX_POWER_LEVEL {
+        if self.state.get().power_level < MAX_POWER_LEVEL {
             self.increment_power_level();
             self.blink(GREEN, 5, DELAY_BLINK);
         } else {
@@ -191,10 +194,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn on_minus_clicked(&self) {
-        if self.power_level.get() == 0 {
-            self.set_power_level(2);
-            self.blink(GREEN, 9, DELAY_BLINK / 2);
-        } else if self.power_level.get() > 1 {
+        if self.state.get().power_level > 1 {
             self.decrement_power_level();
             self.blink(RED, 5, DELAY_BLINK);
         } else {
@@ -203,19 +203,16 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn on_long_clicked(&self) {
-        if self.power_level.get() == 0 {
-            self.set_power_level(1);
-            self.blink(BLUE, 3, DELAY_BLINK / 2);
-        } else {
-            self.set_power_level(0);
-            self.blink(RED, 9, DELAY_BLINK / 2);
-        }
+        self.indicate_nop();
     }
 
     fn on_toggle_clicked(&self) {
+        let current = self.state.get();
+        self.change_state(State {
+            high_beam: !current.high_beam,
+            ..current
+        });
         self.blink(GREEN, 5, DELAY_BLINK / 4);
-        self.high_beam.set(!self.high_beam.get());
-        self.set_power_level(self.power_level.get());
     }
 
     fn remove_blinks(&self) {
@@ -247,21 +244,26 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn increment_power_level(&self) {
-        let current = self.power_level.get();
-        if current < MAX_POWER_LEVEL {
-            self.set_power_level(current + 1);
+        let current = self.state.get();
+        if current.power_level < MAX_POWER_LEVEL {
+            self.change_state(State {
+                power_level: current.power_level + 1,
+                ..current
+            });
         }
     }
 
     fn decrement_power_level(&self) {
-        let current = self.power_level.get();
-        if current > 0 {
-            self.set_power_level(current - 1);
+        let current = self.state.get();
+        if current.power_level > 0 {
+            self.change_state(State {
+                power_level: current.power_level - 1,
+                ..current
+            });
         }
     }
 
-    fn set_power_level(&self, new_level: usize) {
-        self.power_level.set(new_level);
+    fn change_state(&self, new_state: State) {
         self.edt.remove(|msg| match msg {
             Action::SetPwm {
                 start: _,
@@ -271,13 +273,14 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             } => true,
             _ => false,
         });
-        if self.high_beam.get() {
-            self.animate_high_beam(POWER_LEVELS_HIGH[new_level]);
-            self.animate_low_beam(POWER_LEVELS_LOW_AUX[new_level]);
+        if new_state.high_beam {
+            self.animate_low_beam(POWER_LEVELS_LOW_AUX[new_state.power_level]);
+            self.animate_high_beam(POWER_LEVELS_HIGH[new_state.power_level]);
         } else {
-            self.animate_high_beam(POWER_LEVELS_HIGH_AUX[new_level]);
-            self.animate_low_beam(POWER_LEVELS_LOW[new_level]);
+            self.animate_low_beam(POWER_LEVELS_LOW[new_state.power_level]);
+            self.animate_high_beam(0);
         };
+        self.state.set(new_state);
     }
 
     fn animate_high_beam(&self, end: u8) {
@@ -297,7 +300,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
         led.set(next_value as u32);
 
         if i < ANIM_SIZE {
-            let action = SetPwm {
+            let action = Action::SetPwm {
                 start,
                 end,
                 i: i + 1,

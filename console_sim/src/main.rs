@@ -27,21 +27,14 @@ mod dummy_rgb;
 mod keyboard_pin;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (esc_pin, minus_pin, plus_pin) = keys();
+    let (esc_pin, minus_pin, plus_pin, toggle_pin) = keys();
     let led = DummyLed::create(0);
     let led_high = DummyLed::create(0);
     let rgb = DummyRgb::create();
     let edt = EDT::create();
 
-    let light_control = LightControl::new(
-        plus_pin,
-        minus_pin,
-        KeyboardPin::create(28),
-        &led,
-        &led_high,
-        &rgb,
-        &edt,
-    );
+    let light_control =
+        LightControl::new(plus_pin, minus_pin, toggle_pin, &led, &led_high, &rgb, &edt);
     light_control.start();
     light_control.jump_start();
 
@@ -132,7 +125,7 @@ fn draw_tui(
             Spans::from(Span::raw(format!("Low: {}", led))),
             Spans::from(Span::styled(format!("   LED   "), rgb_style)),
             Spans::from(Span::raw(format!(
-                "Joystick: ← ↑ → ↓, Buttons(click and long-click): PGUP PGDN, ESC to terminate"
+                "Buttons(click and long-click): ← ↑ →, ESC to terminate"
             ))),
         ])
         .alignment(Alignment::Left);
@@ -145,18 +138,23 @@ fn draw_tui(
 }
 
 #[cfg(target_os = "linux")]
-fn keys() -> (KeyboardPin, KeyboardPin, KeyboardPin) {
+const KEY_CODE_ESC: u16 = 1;
+#[cfg(target_os = "linux")]
+const KEY_CODE_RIGHT: u16 = 106;
+#[cfg(target_os = "linux")]
+const KEY_CODE_LEFT: u16 = 105;
+#[cfg(target_os = "linux")]
+const KEY_CODE_DOWN: u16 = 108;
+#[cfg(target_os = "linux")]
+const KEY_CODE_UP: u16 = 103;
+
+#[cfg(target_os = "linux")]
+fn keys() -> (KeyboardPin, KeyboardPin, KeyboardPin, KeyboardPin) {
     return (
-        // ESC
-        KeyboardPin::create(1),
-        // left
-        // KeyboardPin::create(105),
-        // right
-        // KeyboardPin::create(106),
-        // down
-        KeyboardPin::create(108),
-        // up
-        KeyboardPin::create(103),
+        KeyboardPin::create(KEY_CODE_ESC),
+        KeyboardPin::create(KEY_CODE_LEFT),
+        KeyboardPin::create(KEY_CODE_RIGHT),
+        KeyboardPin::create(KEY_CODE_UP),
     );
 }
 
@@ -166,5 +164,6 @@ fn keys() -> (KeyboardPin, KeyboardPin, KeyboardPin) {
         KeyboardPin::create(27),
         KeyboardPin::create(37),
         KeyboardPin::create(39),
+        KeyboardPin::create(38),
     );
 }

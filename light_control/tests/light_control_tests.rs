@@ -70,14 +70,6 @@ mod tests {
     }
 
     #[test]
-    fn button_long_click_turns_the_light_off() {
-        with_bench(&|_advance_time, buttons, power_level| {
-            buttons.long_click_plus();
-            assert_eq!(power_level.get(), 0);
-        });
-    }
-
-    #[test]
     fn when_off_minus_button_clicks_switches_on() {
         with_bench(&|_advance_time, buttons, power_level| {
             buttons.long_click_plus();
@@ -112,6 +104,11 @@ mod tests {
     }
 
     fn low(i: usize) -> u32 {
+        assert!(
+            i < POWER_LEVELS_LOW.len(),
+            "Test level exceeds available levels: {}",
+            i
+        );
         POWER_LEVELS_LOW[i] as u32
     }
 
