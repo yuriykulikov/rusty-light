@@ -19,7 +19,9 @@ mod tests {
 
     #[test]
     fn starting_brightness() {
-        with_bench(&|_advance_time, _buttons, power_level| {
+        with_bench(&|advance_time, _buttons, power_level| {
+            // startup animation
+            advance_time(2000);
             assert_eq!(power_level.get(), low(3));
         });
     }
@@ -82,6 +84,8 @@ mod tests {
     #[test]
     fn longer_clicks_have_effect_when_released() {
         with_bench(&|advance_time, buttons, power_level| {
+            // startup animation
+            advance_time(2000);
             assert_eq!(power_level.get(), low(3));
             buttons.press_minus();
             advance_time(700);
