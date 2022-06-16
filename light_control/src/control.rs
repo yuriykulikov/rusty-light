@@ -124,10 +124,40 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     pub fn jump_start(&self) {
-        self.change_state(State {
+        self.state.set(State {
             power_level: POWER_LEVEL_INIT,
             high_beam: false,
         });
+
+        self.edt.schedule(
+            ANIM_STEP,
+            Action::SetPwm {
+                start: 0,
+                end: POWER_LEVELS_HIGH[POWER_LEVEL_INIT],
+                i: 0,
+                high_beam: true,
+            },
+        );
+
+        self.edt.schedule(
+            ANIM_DURATION * 2,
+            Action::SetPwm {
+                start: POWER_LEVELS_HIGH[POWER_LEVEL_INIT],
+                end: 0,
+                i: 0,
+                high_beam: true,
+            },
+        );
+
+        self.edt.schedule(
+            ANIM_DURATION,
+            Action::SetPwm {
+                start: 0,
+                end: POWER_LEVELS_LOW[POWER_LEVEL_INIT],
+                i: 0,
+                high_beam: false,
+            },
+        );
     }
 
     pub fn process_message(&self, action: Action) {
