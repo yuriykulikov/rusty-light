@@ -1,7 +1,9 @@
 // make `std` available when testing
 #![cfg_attr(not(test), no_std)]
 #![no_main]
+#![feature(alloc_error_handler)]
 
+extern crate alloc;
 extern crate cortex_m;
 extern crate cortex_m_rt as rt;
 extern crate jlink_rtt;
@@ -12,6 +14,7 @@ extern crate stm32g0xx_hal as stm_hal;
 use core::cell::{Cell, RefCell};
 use core::fmt::Write;
 
+use alloc_cortex_m::CortexMHeap;
 use nb::block;
 use rt::{entry, exception, ExceptionFrame};
 use stm_hal::prelude::*;
@@ -25,12 +28,18 @@ use crate::button::PullUpButton;
 use crate::pwm_led::PwmLed;
 use crate::rgb::GpioRgb;
 
+#[global_allocator]
+static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
+const HEAP_SIZE: usize = 512; // in bytes
+
 mod button;
 mod pwm_led;
 mod rgb;
 
 #[entry]
 fn main() -> ! {
+    unsafe { ALLOCATOR.init(cortex_m_rt::heap_start() as usize, HEAP_SIZE) }
+
     let mut output = jlink_rtt::NonBlockingOutput::new();
     let _ = writeln!(output, "Firmware started!");
 
@@ -105,4 +114,11 @@ fn HardFault(ef: &ExceptionFrame) -> ! {
     let mut output = jlink_rtt::NonBlockingOutput::new();
     writeln!(output, "Hard fault {:#?}", ef).ok();
     panic!("Hard fault {:#?}", ef);
+}
+
+#[alloc_error_handler]
+fn alloc_error(_layout: core::alloc::Layout) -> ! {
+    let mut output = jlink_rtt::NonBlockingOutput::new();
+    writeln!(output, "Alloc error!").ok();
+    loop {}
 }

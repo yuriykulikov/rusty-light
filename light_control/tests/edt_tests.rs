@@ -15,14 +15,7 @@ mod tests {
         edt.schedule(3000, 4);
 
         // assert that queue has 4 messages
-        assert_eq!(
-            edt.queue
-                .borrow()
-                .iter()
-                .filter(|it| { it.is_some() })
-                .count(),
-            4
-        );
+        assert_eq!(edt.queue_len(), 4);
     }
 
     #[test]
@@ -39,7 +32,7 @@ mod tests {
         edt.remove(|payload| *payload == 2);
 
         // then 2 messages are removed, 2 retained
-        let retained = edt.queue.borrow().iter().filter(|it| it.is_some()).count();
+        let retained = edt.queue_len();
         assert_eq!(retained, 2);
     }
 
@@ -64,14 +57,7 @@ mod tests {
         assert_eq!(events.borrow_mut().remove(0), 2);
 
         // then one event message remains
-        assert_eq!(
-            edt.queue
-                .borrow()
-                .iter()
-                .filter(|it| { it.is_some() })
-                .count(),
-            1
-        );
+        assert_eq!(edt.queue_len(), 1);
     }
 
     #[test]
@@ -105,6 +91,6 @@ mod tests {
         assert_eq!(events.borrow_mut().remove(0), 5); // this was due in 10, order 2
 
         // then one event message remains
-        assert_eq!(edt.queue.borrow().iter().all(|it| { it.is_none() }), true);
+        assert_eq!(edt.queue_len(), 0);
     }
 }

@@ -1,22 +1,15 @@
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
-    use std::mem::size_of_val;
 
     use light_control::bsp::led::{Led, MAX};
     use light_control::bsp::pin::Pin;
     use light_control::bsp::rgb::Rgb;
     use light_control::control::{
-        Action, LightControl, ANIM_DURATION, BUTTON_CHECK_PERIOD, MAX_POWER_LEVEL,
-        POWER_LEVELS_HIGH, POWER_LEVELS_LOW, POWER_LEVELS_LOW_AUX,
+        LightControl, ANIM_DURATION, BUTTON_CHECK_PERIOD, MAX_POWER_LEVEL, POWER_LEVELS_HIGH,
+        POWER_LEVELS_LOW, POWER_LEVELS_LOW_AUX,
     };
     use light_control::edt::EDT;
-
-    #[test]
-    fn edt_queue_size_is_below_1kb() {
-        let edt = EDT::<Action>::create();
-        assert!(size_of_val(&edt.queue) < 500);
-    }
 
     #[test]
     fn starting_brightness() {

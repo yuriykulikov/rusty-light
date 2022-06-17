@@ -119,13 +119,14 @@ Prerequisites:
 rustup target add thumbv6m-none-eabi
 cargo install cargo-binutils
 rustup component add llvm-tools-preview
+rustup +nightly component add llvm-tools-preview
 ```
 
 Build and flash:
 
 ```
-cargo build --manifest-path=stm32-nucleo/Cargo.toml --target=thumbv6m-none-eabi
-cargo objcopy --target=thumbv6m-none-eabi --bin stm32-nucleo -- -O ihex stm32-nucleo.hex
+cargo +nightly build --manifest-path=stm32-nucleo/Cargo.toml --target=thumbv6m-none-eabi
+cargo +nightly objcopy --target=thumbv6m-none-eabi --bin stm32-nucleo -- -O ihex stm32-nucleo.hex
 /usr/bin/JLinkExe -CommandFile command_file.jlink
 ```
 
