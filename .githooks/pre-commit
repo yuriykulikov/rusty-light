@@ -1,0 +1,11 @@
+#!/bin/sh
+
+RS_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ei "\.rs$")
+if [ -n "${RS_FILES}" ]; then
+    echo "cargo fmt --all"
+    (
+      cargo fmt --all
+    )
+    # shellcheck disable=SC2046
+    git add $(echo "$RS_FILES" | paste -s -d " " -)
+fi
