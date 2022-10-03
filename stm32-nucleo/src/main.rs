@@ -67,10 +67,10 @@ fn main() -> ! {
 
     let light_control = LightControl::new(
         PullUpButton {
-            pin: gpiob.pb4.into_pull_up_input(),
+            pin: gpioa.pa1.into_pull_up_input(),
         },
         PullUpButton {
-            pin: gpioa.pa1.into_pull_up_input(),
+            pin: gpiob.pb4.into_pull_up_input(),
         },
         PullUpButton {
             pin: gpioa.pa0.into_pull_up_input(),
