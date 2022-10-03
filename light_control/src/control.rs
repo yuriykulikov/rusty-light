@@ -221,7 +221,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     fn on_plus_clicked(&self) {
         if self.state.get().power_level < MAX_POWER_LEVEL {
             self.increment_power_level();
-            self.blink(GREEN, 5, DELAY_BLINK);
+            self.indicate_click();
         } else {
             self.indicate_nop();
         }
@@ -230,7 +230,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     fn on_minus_clicked(&self) {
         if self.state.get().power_level > 1 {
             self.decrement_power_level();
-            self.blink(RED, 5, DELAY_BLINK);
+            self.indicate_click();
         } else {
             self.indicate_nop();
         }
@@ -246,7 +246,12 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             high_beam: !current.high_beam,
             ..current
         });
-        self.blink(GREEN, 5, DELAY_BLINK / 4);
+        let rgb = self.rgb.get_rgb();
+        if current.high_beam {
+            self.rgb.set_rgb(rgb & !BLUE);
+        } else {
+            self.rgb.set_rgb(rgb | BLUE);
+        }
     }
 
     fn remove_blinks(&self) {
@@ -261,7 +266,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn blink(&self, color: u8, times: u8, period: u16) {
-        self.rgb.set_rgb(color);
+        self.rgb.set_rgb(self.rgb.get_rgb() | color);
         self.remove_blinks();
         self.edt.schedule(
             period as u32,
@@ -274,7 +279,23 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn indicate_nop(&self) {
-        self.blink(BLUE, 1, 500);
+        self.blink(self.battery_color(), 7, DELAY_BLINK / 2);
+    }
+
+    fn indicate_click(&self) {
+        self.blink(self.battery_color(), 1, 500);
+    }
+
+    fn battery_color(&self) -> u8 {
+        let battery_voltage = self.sensors.battery_voltage();
+        let color = if battery_voltage < 6500 {
+            RED
+        } else if battery_voltage < 7200 {
+            RED | GREEN
+        } else {
+            GREEN
+        };
+        color
     }
 
     fn increment_power_level(&self) {
