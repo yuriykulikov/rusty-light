@@ -17,10 +17,13 @@ use core::fmt::Write;
 use alloc_cortex_m::CortexMHeap;
 use nb::block;
 use rt::{entry, exception, ExceptionFrame};
+use stm_hal::analog::adc::{Adc, OversamplingRatio, Precision, SampleTime};
 use stm_hal::prelude::*;
 use stm_hal::{hal, stm32};
 
+use crate::adc::AdcSensors;
 use light_control::bsp::led::Led;
+use light_control::bsp::rgb::Rgb;
 use light_control::control::LightControl;
 use light_control::edt::{Event, EDT};
 
@@ -32,6 +35,7 @@ use crate::rgb::GpioRgb;
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 const HEAP_SIZE: usize = 512; // in bytes
 
+mod adc;
 mod button;
 mod pwm_led;
 mod rgb;
@@ -45,11 +49,29 @@ fn main() -> ! {
 
     // https://github.com/stm32-rs/stm32g0xx-hal
     let dp = stm32::Peripherals::take().expect("cannot take peripherals");
+    let cp = stm32::CorePeripherals::take().expect("cannot take core peripherals");
     let mut rcc = dp.RCC.constrain();
 
     let gpioa = dp.GPIOA.split(&mut rcc);
-    let gpioc = dp.GPIOC.split(&mut rcc);
     let gpiob = dp.GPIOB.split(&mut rcc);
+
+    let a0 = gpioa.pa0;
+    let a1 = gpioa.pa1;
+    let a6 = gpioa.pa7;
+
+    let d9 = gpioa.pa8;
+    let d11 = gpiob.pb5;
+    let d12 = gpiob.pb4;
+    let d13 = gpiob.pb3;
+
+    // datasheet says so:
+    // let d3 = gpiob.pb0;
+    // let d4 = gpiob.pb7;
+    // let d5 = gpiob.pb6;
+    // but actually is it:
+    let d3 = gpiob.pb1;
+    let _d4 = gpioa.pa10;
+    let d5 = gpioa.pa9;
 
     let mut watchdog = dp.IWDG.constrain();
     watchdog.start(2000.ms());
@@ -58,27 +80,49 @@ fn main() -> ! {
     let edt = EDT::create();
     // 16 Khz is not very efficient, but also is not audible
     let pwm = dp.TIM1.pwm(16000.hz(), &mut rcc);
-    let led_low = PwmLed::create(pwm.bind_pin(gpiob.pb3));
-    let led_high = PwmLed::create(pwm.bind_pin(gpioa.pa8));
+    let led_low = PwmLed::create(pwm.bind_pin(d13));
+    let led_high = PwmLed::create(pwm.bind_pin(d9));
+
     let rgb = GpioRgb {
-        pin: RefCell::new(gpioc.pc6.into_push_pull_output()),
+        r: RefCell::new(d3.into_push_pull_output()),
+        g: RefCell::new(d5.into_push_pull_output()),
+        b: RefCell::new(d11.into_push_pull_output()),
         state: Cell::new(0),
+    };
+
+    rgb.set_rgb(0);
+
+    let mut adc: Adc = dp.ADC.constrain(&mut rcc);
+    adc.set_sample_time(SampleTime::T_80);
+    adc.set_precision(Precision::B_12);
+    adc.set_oversampling_ratio(OversamplingRatio::X_16);
+    adc.set_oversampling_shift(16);
+    adc.oversampling_enable(true);
+    cp.SYST.delay(&mut rcc).delay(20.us());
+    adc.calibrate();
+
+    let sensors = AdcSensors {
+        adc: RefCell::new(adc),
+        vin_pin: RefCell::new(a6.into_analog()),
+        r_pull_up: 10000,
+        r_pull_down: 4700 + 90,
     };
 
     let light_control = LightControl::new(
         PullUpButton {
-            pin: gpioa.pa1.into_pull_up_input(),
+            pin: a1.into_pull_up_input(),
         },
         PullUpButton {
-            pin: gpiob.pb4.into_pull_up_input(),
+            pin: d12.into_pull_up_input(),
         },
         PullUpButton {
-            pin: gpioa.pa0.into_pull_up_input(),
+            pin: a0.into_pull_up_input(),
         },
         &led_low,
         &led_high,
         &rgb,
         &edt,
+        &sensors,
     );
 
     light_control.start();
@@ -90,6 +134,7 @@ fn main() -> ! {
             Event::Execute { msg } => {
                 watchdog.feed();
                 light_control.process_message(msg);
+                writeln!(output, "rgb {}", rgb.get_rgb()).unwrap();
                 if prev_logged_state != (led_high.get(), led_low.get()) {
                     writeln!(output, "high: {}%, low: {}%", led_high.get(), led_low.get()).unwrap();
                     prev_logged_state = (led_high.get(), led_low.get());

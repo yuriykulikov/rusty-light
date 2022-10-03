@@ -1,5 +1,6 @@
 use no_std_compat::cell::Cell;
 
+use crate::bsp::adc::Sensors;
 use crate::bsp::led::Led;
 use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
@@ -81,6 +82,7 @@ pub struct LightControl<'a, P: Pin, M: Pin, T: Pin> {
     led: &'a dyn Led,
     led_high: &'a dyn Led,
     rgb: &'a dyn Rgb,
+    sensors: &'a dyn Sensors,
     edt: &'a EDT<Action>,
     state: Cell<State>,
 }
@@ -94,6 +96,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
         led_high: &'a dyn Led,
         rgb: &'a dyn Rgb,
         edt: &'a EDT<Action>,
+        sensors: &'a dyn Sensors,
     ) -> Self {
         return LightControl {
             plus_pin: StatefulButton {
@@ -112,6 +115,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             led_high,
             rgb,
             edt,
+            sensors,
             state: Cell::new(State {
                 power_level: 0,
                 high_beam: false,

@@ -12,6 +12,7 @@ use tui::text::{Span, Spans};
 use tui::widgets::{Block, BorderType, Borders, Paragraph};
 use tui::Terminal;
 
+use light_control::bsp::adc::Sensors;
 use light_control::bsp::led::Led;
 use light_control::bsp::pin::Pin;
 use light_control::bsp::rgb::{Rgb, BLUE, GREEN, RED};
@@ -26,15 +27,28 @@ mod dummy_led;
 mod dummy_rgb;
 mod keyboard_pin;
 
+struct DummySensors {
+    battery: Cell<u32>,
+}
+
+impl Sensors for DummySensors {
+    fn battery_voltage(&self) -> u32 {
+        self.battery.get()
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (esc_pin, minus_pin, plus_pin, toggle_pin) = keys();
+    let (esc_pin, minus_pin, plus_pin, toggle_pin, battery_toggle) = keys();
     let led = DummyLed::create(0);
     let led_high = DummyLed::create(0);
     let rgb = DummyRgb::create();
     let edt = EDT::create();
-
-    let light_control =
-        LightControl::new(plus_pin, minus_pin, toggle_pin, &led, &led_high, &rgb, &edt);
+    let sensors = DummySensors {
+        battery: Cell::new(8000),
+    };
+    let light_control = LightControl::new(
+        plus_pin, minus_pin, toggle_pin, &led, &led_high, &rgb, &edt, &sensors,
+    );
     light_control.start();
     light_control.jump_start();
 
@@ -47,6 +61,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         if esc_pin.is_down() {
             edt.exit();
+        }
+
+        if battery_toggle.is_down() {
+            sensors.battery.set(match sensors.battery.get() {
+                8000 => 7000,
+                7000 => 6000,
+                _ => 8000,
+            });
         }
 
         match edt.poll() {
@@ -86,7 +108,7 @@ fn draw_tui(
                     Constraint::Min(2),
                     Constraint::Length(3),
                 ]
-                .as_ref(),
+                    .as_ref(),
             )
             .split(size);
 
@@ -94,25 +116,25 @@ fn draw_tui(
             " ".repeat(led as usize),
             Style::default().bg(Color::Rgb(253, 244, 220)),
         )))
-        .alignment(Alignment::Center)
-        .block(
-            // Block::default().borders(Borders::BOTTOM).border_type(BorderType::Plain)
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded),
-        );
+            .alignment(Alignment::Center)
+            .block(
+                // Block::default().borders(Borders::BOTTOM).border_type(BorderType::Plain)
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            );
 
         let brightness_high_paragraph = Paragraph::new(Spans::from(Span::styled(
             " ".repeat(led_high as usize),
             Style::default().bg(Color::Rgb(253, 244, 220)),
         )))
-        .alignment(Alignment::Center)
-        .block(
-            // Block::default().borders(Borders::BOTTOM).border_type(BorderType::Plain)
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded),
-        );
+            .alignment(Alignment::Center)
+            .block(
+                // Block::default().borders(Borders::BOTTOM).border_type(BorderType::Plain)
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            );
 
         let rgb_style = Style::default().bg(Color::Rgb(
             if rgb & RED > 0 { 230 } else { 0 },
@@ -125,10 +147,10 @@ fn draw_tui(
             Spans::from(Span::raw(format!("Low: {}", led))),
             Spans::from(Span::styled(format!("   LED   "), rgb_style)),
             Spans::from(Span::raw(format!(
-                "Buttons(click and long-click): ← ↑ →, ESC to terminate"
+                "Buttons(click and long-click): ← (-) → (+) ↑ (toggle high beam) ↓ (toggle battery), ESC to terminate"
             ))),
         ])
-        .alignment(Alignment::Left);
+            .alignment(Alignment::Left);
 
         rect.render_widget(brightness_high_paragraph, vertical_layout[0]);
         rect.render_widget(brightness_paragraph, vertical_layout[1]);
@@ -149,12 +171,19 @@ const KEY_CODE_DOWN: u16 = 108;
 const KEY_CODE_UP: u16 = 103;
 
 #[cfg(target_os = "linux")]
-fn keys() -> (KeyboardPin, KeyboardPin, KeyboardPin, KeyboardPin) {
+fn keys() -> (
+    KeyboardPin,
+    KeyboardPin,
+    KeyboardPin,
+    KeyboardPin,
+    KeyboardPin,
+) {
     return (
         KeyboardPin::create(KEY_CODE_ESC),
         KeyboardPin::create(KEY_CODE_LEFT),
         KeyboardPin::create(KEY_CODE_RIGHT),
         KeyboardPin::create(KEY_CODE_UP),
+        KeyboardPin::create(KEY_CODE_DOWN),
     );
 }
 

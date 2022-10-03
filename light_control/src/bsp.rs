@@ -26,3 +26,9 @@ pub mod led {
         fn get(&self) -> u32;
     }
 }
+
+pub mod adc {
+    pub trait Sensors {
+        fn battery_voltage(&self) -> u32;
+    }
+}

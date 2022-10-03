@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use light_control::bsp::adc::Sensors;
     use std::cell::Cell;
 
     use light_control::bsp::led::{Led, MAX};
@@ -191,6 +192,7 @@ mod tests {
             &led_high,
             &rgb,
             &edt,
+            &TestSensors {},
         );
         light_control.start();
         light_control.jump_start();
@@ -345,6 +347,14 @@ mod tests {
         }
         fn get_rgb(&self) -> u8 {
             return self.rgb.get();
+        }
+    }
+
+    pub struct TestSensors {}
+
+    impl Sensors for TestSensors {
+        fn battery_voltage(&self) -> u32 {
+            8000
         }
     }
 }
