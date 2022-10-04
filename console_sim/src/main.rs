@@ -5,6 +5,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use tokio::time::Instant;
 use tui::backend::CrosstermBackend;
 use tui::layout::{Alignment, Constraint, Direction, Layout};
 use tui::style::{Color, Style};
@@ -73,16 +74,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match edt.poll() {
             Event::Execute { msg } => light_control.process_message(msg),
-            Event::Wait { ms } => sleep(Duration::from_millis(ms as u64)),
+            Event::Wait { ms } => {
+                let ms = ms as u64;
+                let start = Instant::now();
+                let state_to_draw: (u32, u32, u8) = (led.get(), led_high.get(), rgb.get_rgb());
+                if prev_drawn_state.get() != state_to_draw {
+                    draw_tui(&mut terminal, led.get(), led_high.get(), rgb.get_rgb())?;
+                }
+                prev_drawn_state.set(state_to_draw);
+                let duration_ms = start.elapsed().as_millis() as u64;
+                if ms > duration_ms {
+                    sleep(Duration::from_millis(ms - duration_ms));
+                }
+            }
             Event::Halt => {
                 break;
             }
         }
-        let state_to_draw: (u32, u32, u8) = (led.get(), led_high.get(), rgb.get_rgb());
-        if prev_drawn_state.get() != state_to_draw {
-            draw_tui(&mut terminal, led.get(), led_high.get(), rgb.get_rgb())?;
-        }
-        prev_drawn_state.set(state_to_draw);
     }
 
     disable_raw_mode().expect("can go back to normal");

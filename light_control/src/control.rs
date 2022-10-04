@@ -21,6 +21,7 @@ pub enum Action {
         i: usize,
         high_beam: bool,
     },
+    IndicateBattery,
 }
 
 pub const BUTTON_CHECK_PERIOD: u32 = 50;
@@ -125,6 +126,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
 
     pub fn start(&self) {
         self.check_buttons();
+        self.indicate_battery_tick();
     }
 
     pub fn jump_start(&self) {
@@ -180,6 +182,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             } => {
                 self.continue_led_animation(start, end, i, high_beam);
             }
+            Action::IndicateBattery => self.indicate_battery_tick(),
         }
     }
 
@@ -284,6 +287,11 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
 
     fn indicate_click(&self) {
         self.blink(self.battery_color(), 1, 500);
+    }
+
+    fn indicate_battery_tick(&self) {
+        self.indicate_click();
+        self.edt.schedule(10000, Action::IndicateBattery);
     }
 
     fn battery_color(&self) -> u8 {
