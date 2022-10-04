@@ -189,7 +189,13 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     fn blink_led(&self, color: u8, blinks: u8, period: u16) {
         if blinks > 0 {
             let rgb = self.rgb.get_rgb();
-            self.rgb.set_rgb(rgb ^ color);
+            let rgb = rgb ^ color;
+            let rgb = if rgb == 0 && self.state.get().high_beam {
+                BLUE
+            } else {
+                rgb
+            };
+            self.rgb.set_rgb(rgb);
             let action = Action::Blink {
                 color,
                 blinks: blinks - 1,
@@ -269,7 +275,9 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn blink(&self, color: u8, times: u8, period: u16) {
-        self.rgb.set_rgb(self.rgb.get_rgb() | color);
+        let rgb = self.rgb.get_rgb() & !BLUE;
+        let rgb = rgb | color;
+        self.rgb.set_rgb(rgb);
         self.remove_blinks();
         self.edt.schedule(
             period as u32,
