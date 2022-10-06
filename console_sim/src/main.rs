@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let prev_drawn_state: Cell<(u32, u32, u8)> = Cell::new((0, 0, 0));
     loop {
         if esc_pin.is_down() {
-            edt.exit();
+            break;
         }
 
         if battery_toggle.is_down() {

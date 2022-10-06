@@ -38,11 +38,6 @@ impl<T: Copy> EDT<T> {
         self.now.get()
     }
 
-    pub fn exit(&self) {
-        // clearing the queue ends the loop
-        self.queue.borrow_mut().clear();
-    }
-
     pub fn poll(&self) -> Event<T> {
         let head_option = self.peek_head();
 
@@ -72,6 +67,7 @@ impl<T: Copy> EDT<T> {
     }
 
     /// Advances the time by the given value and feeds messages to the handler
+    #[cfg(not(target_arch = "thumbv6m-none-eabi"))]
     pub fn advance_time_by(&self, time: u32, handler: &dyn Fn(T)) {
         let target = self.now.get() + time;
         let mut elapsed: u32 = 0;
@@ -136,6 +132,7 @@ impl<T: Copy> EDT<T> {
         self.queue.borrow_mut().retain(|it| !predicate(&it.payload));
     }
 
+    #[cfg(not(target_arch = "thumbv6m-none-eabi"))]
     pub fn queue_len(&self) -> usize {
         self.queue.borrow().len()
     }
