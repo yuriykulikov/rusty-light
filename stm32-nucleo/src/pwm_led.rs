@@ -1,6 +1,5 @@
 use crate::hal;
 use core::cell::{Cell, RefCell};
-use core::fmt::Write;
 use light_control::bsp::led::Led;
 use light_control::perceived_light_math::fill_pwm_duty_cycle_values;
 
