@@ -36,6 +36,10 @@ impl Sensors for DummySensors {
     fn battery_voltage(&self) -> u32 {
         self.battery.get()
     }
+
+    fn temp(&self) -> u32 {
+        1000
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -356,5 +356,9 @@ mod tests {
         fn battery_voltage(&self) -> u32 {
             8000
         }
+
+        fn temp(&self) -> u32 {
+            1000
+        }
     }
 }
