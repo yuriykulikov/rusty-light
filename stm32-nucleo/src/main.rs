@@ -44,12 +44,9 @@ mod rgb;
 fn main() -> ! {
     unsafe { ALLOCATOR.init(cortex_m_rt::heap_start() as usize, HEAP_SIZE) }
 
-    let mut output = jlink_rtt::NonBlockingOutput::new();
-    let _ = writeln!(output, "Firmware started!");
-
     // https://github.com/stm32-rs/stm32g0xx-hal
-    let dp = stm32::Peripherals::take().expect("cannot take peripherals");
-    let cp = stm32::CorePeripherals::take().expect("cannot take core peripherals");
+    let dp = stm32::Peripherals::take().unwrap();
+    let cp = stm32::CorePeripherals::take().unwrap();
     let mut rcc = dp.RCC.constrain();
 
     let gpioa = dp.GPIOA.split(&mut rcc);
@@ -128,6 +125,7 @@ fn main() -> ! {
     light_control.start();
     light_control.jump_start();
 
+    let mut output = jlink_rtt::NonBlockingOutput::new();
     let mut prev_logged_state = (0, 0);
     loop {
         match edt.poll() {
@@ -149,21 +147,15 @@ fn main() -> ! {
             }
         }
     }
-
-    writeln!(output, "Halted!").unwrap();
-    panic!("Halted!");
+    panic!("");
 }
 
 #[exception]
-fn HardFault(ef: &ExceptionFrame) -> ! {
-    let mut output = jlink_rtt::NonBlockingOutput::new();
-    writeln!(output, "Hard fault {:#?}", ef).ok();
-    panic!("Hard fault {:#?}", ef);
+fn HardFault(_ef: &ExceptionFrame) -> ! {
+    panic!("");
 }
 
 #[alloc_error_handler]
 fn alloc_error(_layout: core::alloc::Layout) -> ! {
-    let mut output = jlink_rtt::NonBlockingOutput::new();
-    writeln!(output, "Alloc error!").ok();
     loop {}
 }
