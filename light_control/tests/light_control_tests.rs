@@ -203,6 +203,7 @@ mod tests {
         );
         light_control.start();
         light_control.jump_start();
+
         edt.advance_time_by(1000, &|msg| {
             light_control.process_message(msg);
         });
@@ -365,7 +366,7 @@ mod tests {
         }
 
         fn temp(&self) -> u32 {
-            1000
+            1650
         }
     }
 }

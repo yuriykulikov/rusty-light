@@ -6,6 +6,7 @@ use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
 use crate::control::ButtonState::{Clicked, LongClicked, Nothing};
 use crate::edt::EDT;
+use crate::voltage_to_temp::voltage_to_temp;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy)]
 pub enum Action {
@@ -21,12 +22,11 @@ pub enum Action {
         i: usize,
         high_beam: bool,
     },
-    IndicateBattery,
+    CheckBatteryAndTemperature,
 }
 
 pub const BUTTON_CHECK_PERIOD: u32 = 50;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000;
-pub const DELAY_BLINK: u16 = 100;
 
 pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 25, 50, 75, 100];
 pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 25, 45, 60, 80];
@@ -126,7 +126,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
 
     pub fn start(&self) {
         self.check_buttons();
-        self.indicate_battery_tick();
+        self.check_battery_and_temperature();
     }
 
     pub fn jump_start(&self) {
@@ -182,7 +182,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             } => {
                 self.continue_led_animation(start, end, i, high_beam);
             }
-            Action::IndicateBattery => self.indicate_battery_tick(),
+            Action::CheckBatteryAndTemperature => self.check_battery_and_temperature(),
         }
     }
 
@@ -290,20 +290,53 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn indicate_nop(&self) {
-        self.blink(self.battery_color(), 7, DELAY_BLINK / 2);
+        self.blink(Self::battery_color(self.sensors.battery_voltage()), 7, 50);
     }
 
     fn indicate_click(&self) {
-        self.blink(self.battery_color(), 1, 500);
+        self.blink(Self::battery_color(self.sensors.battery_voltage()), 1, 500);
     }
 
-    fn indicate_battery_tick(&self) {
-        self.indicate_click();
-        self.edt.schedule(10000, Action::IndicateBattery);
-    }
-
-    fn battery_color(&self) -> u8 {
+    fn check_battery_and_temperature(&self) {
         let battery_voltage = self.sensors.battery_voltage();
+        let temp = voltage_to_temp(self.sensors.temp());
+        let high = self.state.get().high_beam;
+        if temp > 70 {
+            // high beam off and low power
+            self.change_state(State {
+                high_beam: false,
+                power_level: 2,
+            });
+            self.blink(GREEN, 13, 100);
+        } else if temp > 60 {
+            // one step down
+            if self.state.get().power_level > 1 {
+                self.decrement_power_level();
+            }
+            self.blink(GREEN, 13, 100);
+        } else if high && battery_voltage < 6000 {
+            // high beam off
+            self.change_state(State {
+                high_beam: false,
+                ..self.state.get()
+            });
+            self.blink(RED, 5, 100);
+        } else if high && battery_voltage < 6200 {
+            // TODO cap
+            self.blink(RED, 5, 100);
+        } else if battery_voltage < 6200 {
+            if self.state.get().power_level > 1 {
+                self.decrement_power_level();
+            }
+            self.blink(RED, 5, 100);
+        } else if battery_voltage < 6400 {
+            // TODO cap
+            self.blink(RED, 5, 100);
+        }
+        self.edt.schedule(10000, Action::CheckBatteryAndTemperature);
+    }
+
+    fn battery_color(battery_voltage: u32) -> u8 {
         let color = if battery_voltage < 6500 {
             RED
         } else if battery_voltage < 7200 {

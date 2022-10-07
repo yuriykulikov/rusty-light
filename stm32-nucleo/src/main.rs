@@ -24,6 +24,7 @@ use light_control::bsp::pin::Pin;
 use light_control::bsp::rgb::Rgb;
 use light_control::control::LightControl;
 use light_control::edt::{Event, EDT};
+use light_control::voltage_to_temp::voltage_to_temp;
 
 use crate::adc::AdcSensors;
 use crate::button::PullUpButton;
@@ -131,7 +132,7 @@ fn main() -> ! {
                         led_high.get(),
                         led_low.get(),
                         sensors.battery_voltage(),
-                        sensors.temp(),
+                        voltage_to_temp(sensors.temp()),
                     )
                     .unwrap();
                     prev_logged_time = edt.now();
