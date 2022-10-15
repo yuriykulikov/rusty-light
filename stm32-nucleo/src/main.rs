@@ -1,9 +1,7 @@
 // make `std` available when testing
 #![cfg_attr(not(test), no_std)]
 #![no_main]
-#![feature(alloc_error_handler)]
 
-extern crate alloc;
 extern crate cortex_m;
 extern crate cortex_m_rt as rt;
 extern crate jlink_rtt;
@@ -14,7 +12,6 @@ extern crate stm32g0xx_hal as stm_hal;
 use core::cell::{Cell, RefCell};
 use core::fmt::Write;
 
-use alloc_cortex_m::CortexMHeap;
 use nb::block;
 use rt::{entry, exception, ExceptionFrame};
 use stm_hal::analog::adc::{Adc, OversamplingRatio, Precision, SampleTime};
@@ -33,10 +30,6 @@ use crate::button::PullUpButton;
 use crate::pwm_led::PwmLed;
 use crate::rgb::GpioRgb;
 
-#[global_allocator]
-static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
-const HEAP_SIZE: usize = 512; // in bytes
-
 mod adc;
 mod button;
 mod pwm_led;
@@ -44,8 +37,6 @@ mod rgb;
 
 #[entry]
 fn main() -> ! {
-    unsafe { ALLOCATOR.init(cortex_m_rt::heap_start() as usize, HEAP_SIZE) }
-
     // https://github.com/stm32-rs/stm32g0xx-hal
     let dp = stm32::Peripherals::take().unwrap();
     let cp = stm32::CorePeripherals::take().unwrap();
@@ -161,11 +152,6 @@ fn main() -> ! {
 #[exception]
 fn HardFault(_ef: &ExceptionFrame) -> ! {
     panic!("");
-}
-
-#[alloc_error_handler]
-fn alloc_error(_layout: core::alloc::Layout) -> ! {
-    loop {}
 }
 
 struct SensorPin<'a> {

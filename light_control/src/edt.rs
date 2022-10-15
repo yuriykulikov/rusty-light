@@ -1,8 +1,7 @@
-use alloc::vec;
-use alloc::vec::Vec;
-
 use no_std_compat::cell::{Cell, RefCell};
 use no_std_compat::cmp::Ordering::Equal;
+
+const SIZE: usize = 10;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy)]
 pub struct Msg<T: Sized> {
@@ -13,16 +12,14 @@ pub struct Msg<T: Sized> {
 
 pub struct EDT<T> {
     now: Cell<u32>,
-    queue: RefCell<Vec<Msg<T>>>,
+    pub queue: RefCell<[Option<Msg<T>>; SIZE]>,
 }
-
-impl<T> EDT<T> {}
 
 impl<T: Copy> EDT<T> {
     pub fn create() -> EDT<T> {
         EDT {
             now: Cell::new(0),
-            queue: RefCell::new(vec![]),
+            queue: RefCell::new([None; SIZE]),
         }
     }
 }
@@ -39,31 +36,35 @@ impl<T: Copy> EDT<T> {
     }
 
     pub fn poll(&self) -> Event<T> {
-        let head_option = self.peek_head();
-
-        if let Some(head) = head_option {
-            let to_wait = head.when - self.now.get();
-            // change new now
-            self.now.set(head.when);
-            if to_wait > 0 {
-                Event::Wait { ms: to_wait }
-            } else {
-                let position = self
-                    .queue
-                    .borrow()
-                    .iter()
-                    .position(|it| it.when == head.when && it.order == head.order);
-                assert!(position.is_some());
-                if let Some(position) = position {
-                    let removed = self.queue.borrow_mut().swap_remove(position);
-                    assert_eq!(removed.when, head.when);
-                    assert_eq!(removed.order, head.order);
-                }
-                Event::Execute { msg: head.payload }
-            }
-        } else {
-            Event::Halt
+        if self.queue.borrow().iter().all(|msg| msg.is_none()) {
+            return Event::Halt;
         }
+
+        let head = self.peek_head();
+        let to_wait = head.when - self.now.get();
+
+        return if to_wait > 0 {
+            // processed all messages due before target_time
+            self.now.set(head.when);
+            Event::Wait { ms: to_wait }
+        } else {
+            let next_when = head.when;
+
+            // WTF is that
+            self.queue
+                .borrow_mut()
+                .iter_mut()
+                .filter(|it| {
+                    it.is_some() && it.unwrap().when == head.when && it.unwrap().order == head.order
+                })
+                .take(1)
+                .for_each(|opt| {
+                    *opt = None;
+                });
+
+            self.now.set(next_when);
+            Event::Execute { msg: head.payload }
+        };
     }
 
     /// Advances the time by the given value and feeds messages to the handler
@@ -90,18 +91,20 @@ impl<T: Copy> EDT<T> {
         }
     }
 
-    fn peek_head(&self) -> Option<Msg<T>> {
+    fn peek_head(&self) -> Msg<T> {
         self.queue
             .borrow()
             .iter()
+            .filter_map(|&opt| opt)
             .min_by(|lhs, rhs| {
                 let by_when = lhs.when.cmp(&rhs.when);
-                match by_when {
-                    Equal => lhs.order.cmp(&rhs.order),
-                    _ => by_when,
+                if by_when != Equal {
+                    by_when
+                } else {
+                    lhs.order.cmp(&rhs.order)
                 }
             })
-            .cloned()
+            .unwrap()
     }
 
     pub fn schedule(&self, delay: u32, payload: T) {
@@ -111,25 +114,37 @@ impl<T: Copy> EDT<T> {
             .queue
             .borrow()
             .iter()
-            .filter(|message| message.when == when)
-            .map(|it| it.order)
+            .filter(|opt| opt.is_some() && opt.unwrap().when == when)
+            .map(|it| it.unwrap().order)
             .max()
             .unwrap_or(0);
 
-        self.queue.borrow_mut().push(Msg {
-            when,
-            order,
-            payload,
-        });
-
-        assert!(self.queue.borrow().len() < 10);
+        self.queue
+            .borrow_mut()
+            .iter_mut()
+            .filter(|it| it.is_none())
+            .take(1)
+            .for_each(|opt| {
+                *opt = Some(Msg {
+                    when,
+                    order,
+                    payload,
+                });
+            })
     }
 
     pub fn remove<F>(&self, mut predicate: F)
     where
         F: FnMut(&T) -> bool,
     {
-        self.queue.borrow_mut().retain(|it| !predicate(&it.payload));
+        self.queue
+            .borrow_mut()
+            .iter_mut()
+            .filter(|it| it.is_some() && predicate(&it.unwrap().payload))
+            .for_each(|opt| {
+                // return to pool
+                *opt = None;
+            });
     }
 
     #[cfg(not(target_arch = "thumbv6m-none-eabi"))]
