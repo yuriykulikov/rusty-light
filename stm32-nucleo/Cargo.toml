@@ -15,7 +15,6 @@ cortex-m-rt = "0.6.15"
 panic-halt = "0.2.0"
 jlink_rtt = { git = "https://github.com/wez/jlink_rtt", rev = "e085961" }
 light_control = { path = "../light_control" }
-alloc-cortex-m = "0.4.2"
 
 [dependencies.stm32g0xx-hal]
 version = "0.1.5"
