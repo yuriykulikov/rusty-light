@@ -290,56 +290,53 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn indicate_nop(&self) {
-        self.blink(Self::battery_color(self.sensors.battery_voltage()), 7, 50);
+        self.blink(Self::battery_color(self.battery_voltage()), 7, 50);
     }
 
     fn indicate_click(&self) {
-        self.blink(Self::battery_color(self.sensors.battery_voltage()), 1, 500);
+        self.blink(Self::battery_color(self.battery_voltage()), 1, 500);
     }
 
+    fn battery_voltage(&self) -> u32 {
+        self.sensors
+            .battery_voltage(self.led_high.get(), self.led.get())
+    }
+
+    /// https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
     fn check_battery_and_temperature(&self) {
-        let battery_voltage = self.sensors.battery_voltage();
+        let battery_voltage = self.battery_voltage();
         let temp = voltage_to_temp(self.sensors.temp());
-        let high = self.state.get().high_beam;
         if temp > 70 {
             // high beam off and low power
             self.change_state(State {
                 high_beam: false,
                 power_level: 2,
             });
-            self.blink(GREEN, 13, 100);
+            self.blink(RED, 1, 5000);
         } else if temp > 60 {
             // one step down
             if self.state.get().power_level > 1 {
                 self.decrement_power_level();
             }
-            self.blink(GREEN, 13, 100);
-        } else if high && battery_voltage < 6000 {
-            // high beam off
+            self.blink(RED, 1, 5000);
+        } else if battery_voltage < 7000 {
+            // TODO power saver profiles
             self.change_state(State {
                 high_beam: false,
-                ..self.state.get()
+                power_level: 2,
             });
-            self.blink(RED, 5, 100);
-        } else if high && battery_voltage < 6200 {
-            // TODO cap
-            self.blink(RED, 5, 100);
-        } else if battery_voltage < 6200 {
-            if self.state.get().power_level > 1 {
-                self.decrement_power_level();
-            }
-            self.blink(RED, 5, 100);
-        } else if battery_voltage < 6400 {
-            // TODO cap
-            self.blink(RED, 5, 100);
+            self.blink(Self::battery_color(self.battery_voltage()), 5, 100);
+        } else {
+            self.indicate_click();
         }
         self.edt.schedule(10000, Action::CheckBatteryAndTemperature);
     }
 
+    /// https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
     fn battery_color(battery_voltage: u32) -> u8 {
-        let color = if battery_voltage < 6500 {
+        let color = if battery_voltage < 7400 {
             RED
-        } else if battery_voltage < 7200 {
+        } else if battery_voltage < 7800 {
             RED | GREEN
         } else {
             GREEN

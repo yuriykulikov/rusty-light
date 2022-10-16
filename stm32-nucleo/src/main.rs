@@ -69,8 +69,8 @@ fn main() -> ! {
 
     let mut timer = dp.TIM17.timer(&mut rcc);
     let edt = EDT::create();
-    // 16 Khz is not very efficient, but also is not audible
-    let pwm = dp.TIM1.pwm(16000.hz(), &mut rcc);
+    // Driver range is 200-1000 Hz
+    let pwm = dp.TIM1.pwm(300.hz(), &mut rcc);
     let led_low = PwmLed::create(pwm.bind_pin(d13));
     let led_high = PwmLed::create(pwm.bind_pin(d9));
 
@@ -97,7 +97,7 @@ fn main() -> ! {
         vin_pin: RefCell::new(a6.into_analog()),
         vin_temp: RefCell::new(a1.into_analog()),
         r_pull_up: 10000,
-        r_pull_down: 4700 + 90,
+        r_pull_down: 4790,
     };
 
     let light_control = LightControl::new(
@@ -126,12 +126,14 @@ fn main() -> ! {
                 watchdog.feed();
                 light_control.process_message(msg);
                 if edt.now() > prev_logged_time + 2000 {
+                    let voltage: u32 = sensors.battery_voltage(led_high.get(), led_low.get());
+
                     writeln!(
                         output,
                         "h: {}% l: {}% v: {} t: {}",
                         led_high.get(),
                         led_low.get(),
-                        sensors.battery_voltage(),
+                        voltage,
                         voltage_to_temp(sensors.temp()),
                     )
                     .unwrap();

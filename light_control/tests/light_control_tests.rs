@@ -361,7 +361,7 @@ mod tests {
     pub struct TestSensors {}
 
     impl Sensors for TestSensors {
-        fn battery_voltage(&self) -> u32 {
+        fn battery_voltage(&self, _high_percentage: u32, _low_percentage: u32) -> u32 {
             8000
         }
 
