@@ -38,7 +38,7 @@ impl Sensors for DummySensors {
     }
 
     fn temp(&self) -> u32 {
-        1000
+        1650
     }
 }
 

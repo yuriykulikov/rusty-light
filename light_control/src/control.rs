@@ -6,6 +6,7 @@ use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
 use crate::control::ButtonState::{Clicked, LongClicked, Nothing};
 use crate::edt::EDT;
+use crate::voltage_to_temp::voltage_to_temp;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy)]
 pub enum Action {
@@ -21,7 +22,7 @@ pub enum Action {
         i: usize,
         high_beam: bool,
     },
-    IndicateBattery,
+    CheckBatteryAndTemperature,
 }
 
 pub const BUTTON_CHECK_PERIOD: u32 = 50;
@@ -126,7 +127,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
 
     pub fn start(&self) {
         self.check_buttons();
-        self.indicate_battery_tick();
+        self.check_battery_and_temperature();
     }
 
     pub fn jump_start(&self) {
@@ -182,7 +183,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             } => {
                 self.continue_led_animation(start, end, i, high_beam);
             }
-            Action::IndicateBattery => self.indicate_battery_tick(),
+            Action::CheckBatteryAndTemperature => self.check_battery_and_temperature(),
         }
     }
 
@@ -297,9 +298,26 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
         self.blink(self.battery_color(), 1, 500);
     }
 
-    fn indicate_battery_tick(&self) {
-        self.indicate_click();
-        self.edt.schedule(10000, Action::IndicateBattery);
+    /// https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
+    fn check_battery_and_temperature(&self) {
+        let temp = voltage_to_temp(self.sensors.temp());
+        if temp > 70 {
+            // high beam off and low power
+            self.change_state(State {
+                high_beam: false,
+                power_level: 2,
+            });
+            self.blink(RED, 1, 5000);
+        } else if temp > 60 {
+            // one step down
+            if self.state.get().power_level > 1 {
+                self.decrement_power_level();
+            }
+            self.blink(RED, 1, 5000);
+        } else {
+            self.indicate_click();
+        }
+        self.edt.schedule(10000, Action::CheckBatteryAndTemperature);
     }
 
     fn battery_color(&self) -> u8 {

@@ -131,7 +131,7 @@ fn main() -> ! {
                         led_high.get(),
                         led_low.get(),
                         sensors.battery_voltage(),
-                        sensors.temp(),
+                        voltage_to_temp(sensors.temp()),
                     )
                     .unwrap();
                     prev_logged_time = edt.now();
