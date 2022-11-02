@@ -27,7 +27,6 @@ pub enum Action {
 
 pub const BUTTON_CHECK_PERIOD: u32 = 50;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000;
-pub const DELAY_BLINK: u16 = 100;
 
 pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 25, 50, 75, 100];
 pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 25, 45, 60, 80];
@@ -291,11 +290,16 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn indicate_nop(&self) {
-        self.blink(self.battery_color(), 7, DELAY_BLINK / 2);
+        self.blink(Self::battery_color(self.battery_voltage()), 7, 50);
     }
 
     fn indicate_click(&self) {
-        self.blink(self.battery_color(), 1, 500);
+        self.blink(Self::battery_color(self.battery_voltage()), 1, 500);
+    }
+
+    fn battery_voltage(&self) -> u32 {
+        self.sensors
+            .battery_voltage(self.led_high.get(), self.led.get())
     }
 
     /// https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
@@ -320,11 +324,11 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
         self.edt.schedule(10000, Action::CheckBatteryAndTemperature);
     }
 
-    fn battery_color(&self) -> u8 {
-        let battery_voltage = self.sensors.battery_voltage();
-        let color = if battery_voltage < 6500 {
+    /// https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
+    fn battery_color(battery_voltage: u32) -> u8 {
+        let color = if battery_voltage < 7400 {
             RED
-        } else if battery_voltage < 7200 {
+        } else if battery_voltage < 7800 {
             RED | GREEN
         } else {
             GREEN
@@ -397,5 +401,31 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             };
             self.edt.schedule(ANIM_STEP, action);
         }
+    }
+}
+
+pub fn battery_voltage_to_capacity(battery_voltage_mv: u32) -> u32 {
+    if battery_voltage_mv > 4100 * 2 {
+        100
+    } else if battery_voltage_mv > 4000 * 2 {
+        94
+    } else if battery_voltage_mv > 3900 * 2 {
+        83
+    } else if battery_voltage_mv > 3800 * 2 {
+        73
+    } else if battery_voltage_mv > 3700 * 2 {
+        60
+    } else if battery_voltage_mv > 3600 * 2 {
+        52
+    } else if battery_voltage_mv > 3500 * 2 {
+        38
+    } else if battery_voltage_mv > 3400 * 2 {
+        20
+    } else if battery_voltage_mv > 3300 * 2 {
+        11
+    } else if battery_voltage_mv > 3200 * 2 {
+        1
+    } else {
+        0
     }
 }

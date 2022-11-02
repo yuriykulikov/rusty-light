@@ -15,9 +15,22 @@ pub fn fill_pwm_duty_cycle_values(duties: &mut [u16; 101], min: u16, max: u16) {
     }
 }
 
+pub fn current_ma(battery_mv: u32, driver_current_ma: u32, percentage: u32) -> u32 {
+    let percentage = percentage as u32;
+    let max_output_power = driver_current_ma * 3000 * 5;
+    let max_drained_power = max_output_power / battery_mv * 85 / 100;
+    if percentage < 8 {
+        max_drained_power * percentage / 903
+    } else {
+        // (i+16)/116)^3
+        max_drained_power * (percentage + 16) / 116 * (percentage + 16) / 116 * (percentage + 16)
+            / 116
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::perceived_light_math::fill_pwm_duty_cycle_values;
+    use crate::perceived_light_math::{current_ma, fill_pwm_duty_cycle_values};
 
     #[test]
     fn calculate_pwm() {
@@ -33,5 +46,11 @@ mod test {
         let mut duties: [u16; 101] = [0; 101];
         fill_pwm_duty_cycle_values(&mut duties, 86, 1599);
         assert_eq!(duties, expected);
+    }
+
+    #[test]
+    fn current_ma_test() {
+        assert_eq!(current_ma(7555, 850, 10), 15);
+        assert_eq!(current_ma(7555, 850, 90), 1092);
     }
 }

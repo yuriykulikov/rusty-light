@@ -29,7 +29,7 @@ pub mod led {
 
 pub mod adc {
     pub trait Sensors {
-        fn battery_voltage(&self) -> u32;
+        fn battery_voltage(&self, high_percentage: u32, low_percentage: u32) -> u32;
         fn temp(&self) -> u32;
     }
 }
