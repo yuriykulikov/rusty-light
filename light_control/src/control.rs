@@ -1,5 +1,6 @@
 use no_std_compat::cell::Cell;
 
+use crate::battery_voltage_to_capacity::battery_voltage_to_capacity;
 use crate::bsp::adc::Sensors;
 use crate::bsp::led::Led;
 use crate::bsp::pin::Pin;
@@ -22,6 +23,7 @@ pub enum Action {
         high_beam: bool,
     },
     CheckBatteryAndTemperature,
+    IndicateBatteryAndTemperature,
 }
 
 pub const BUTTON_CHECK_PERIOD: u32 = 50;
@@ -72,6 +74,7 @@ impl<P: Pin> StatefulButton<P> {
 struct State {
     power_level: usize,
     high_beam: bool,
+    throttle: u32,
 }
 
 /// Control logic evaluates button states and changes the light intensity
@@ -119,6 +122,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             state: Cell::new(State {
                 power_level: 0,
                 high_beam: false,
+                throttle: 100,
             }),
         };
     }
@@ -126,12 +130,14 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     pub fn start(&self) {
         self.check_buttons();
         self.check_battery_and_temperature();
+        self.indicate_battery_and_temperature();
     }
 
     pub fn jump_start(&self) {
         self.state.set(State {
             power_level: POWER_LEVEL_INIT,
             high_beam: false,
+            throttle: 100,
         });
 
         self.edt.schedule(
@@ -182,6 +188,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
                 self.continue_led_animation(start, end, i, high_beam);
             }
             Action::CheckBatteryAndTemperature => self.check_battery_and_temperature(),
+            Action::IndicateBatteryAndTemperature => self.indicate_battery_and_temperature(),
         }
     }
 
@@ -289,50 +296,52 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 
     fn indicate_nop(&self) {
-        self.blink(Self::battery_color(self.battery_voltage()), 7, 50);
+        self.blink(Self::battery_color(self.battery_capacity()), 7, 50);
     }
 
     fn indicate_click(&self) {
-        self.blink(Self::battery_color(self.battery_voltage()), 1, 500);
+        self.blink(Self::battery_color(self.battery_capacity()), 1, 500);
     }
 
-    fn battery_voltage(&self) -> u32 {
-        self.sensors
-            .battery_voltage(self.led_high.get(), self.led.get())
+    fn battery_capacity(&self) -> u32 {
+        let battery_voltage_mv = self
+            .sensors
+            .battery_voltage(self.led_high.get(), self.led.get());
+        battery_voltage_to_capacity(battery_voltage_mv)
     }
 
-    /// https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
     fn check_battery_and_temperature(&self) {
         let temp = self.sensors.temp();
-        if temp > 70 {
-            // high beam off and low power
-            self.change_state(State {
-                high_beam: false,
-                power_level: 2,
-            });
-            self.blink(RED, 1, 5000);
-        } else if temp > 60 {
-            // one step down
-            if self.state.get().power_level > 1 {
-                self.decrement_power_level();
-            }
-            self.blink(RED, 1, 5000);
-        } else {
-            self.indicate_click();
+        let battery_capacity = self.battery_capacity();
+        let throttle = calc_throttle(temp, battery_capacity);
+        let state = self.state.get();
+        if throttle != state.throttle {
+            self.change_state(State { throttle, ..state });
         }
-        self.edt.schedule(10000, Action::CheckBatteryAndTemperature);
+        self.edt.schedule(500, Action::CheckBatteryAndTemperature);
     }
 
-    /// https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
-    fn battery_color(battery_voltage: u32) -> u8 {
-        let color = if battery_voltage < 7400 {
+    fn indicate_battery_and_temperature(&self) {
+        let temp = self.sensors.temp();
+        if temp > 60 {
+            self.blink(RED | GREEN | BLUE, 13, 50);
+            self.edt
+                .schedule(3000, Action::IndicateBatteryAndTemperature);
+        } else {
+            self.indicate_click();
+            self.edt
+                .schedule(10000, Action::IndicateBatteryAndTemperature);
+        };
+    }
+
+    fn battery_color(battery_capacity: u32) -> u8 {
+        if battery_capacity <= 20 {
             RED
-        } else if battery_voltage < 7800 {
+        } else if battery_capacity <= 40 {
             RED | GREEN
         } else {
             GREEN
-        };
-        color
+        }
     }
 
     fn increment_power_level(&self) {
@@ -365,13 +374,9 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             } => true,
             _ => false,
         });
-        if new_state.high_beam {
-            self.animate_low_beam(POWER_LEVELS_LOW_AUX[new_state.power_level]);
-            self.animate_high_beam(POWER_LEVELS_HIGH[new_state.power_level]);
-        } else {
-            self.animate_low_beam(POWER_LEVELS_LOW[new_state.power_level]);
-            self.animate_high_beam(0);
-        };
+        let (low, high) = pwms(&new_state);
+        self.animate_low_beam(low);
+        self.animate_high_beam(high);
         self.state.set(new_state);
     }
 
@@ -403,28 +408,39 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
     }
 }
 
-pub fn battery_voltage_to_capacity(battery_voltage_mv: u32) -> u32 {
-    if battery_voltage_mv > 4100 * 2 {
-        100
-    } else if battery_voltage_mv > 4000 * 2 {
-        94
-    } else if battery_voltage_mv > 3900 * 2 {
-        83
-    } else if battery_voltage_mv > 3800 * 2 {
-        73
-    } else if battery_voltage_mv > 3700 * 2 {
-        60
-    } else if battery_voltage_mv > 3600 * 2 {
-        52
-    } else if battery_voltage_mv > 3500 * 2 {
-        38
-    } else if battery_voltage_mv > 3400 * 2 {
-        20
-    } else if battery_voltage_mv > 3300 * 2 {
-        11
-    } else if battery_voltage_mv > 3200 * 2 {
+fn calc_throttle(temperature: i32, battery_capacity: u32) -> u32 {
+    let temp_throttle = if temperature > 80 {
         1
+    } else if temperature > 60 {
+        // 100 +(60 - temperature) * 4
+        (340 - temperature * 4) as u32
     } else {
-        0
+        100
+    };
+
+    let bat_throttle = if battery_capacity <= 20 {
+        battery_capacity * 5
+    } else {
+        100
+    };
+
+    if bat_throttle < temp_throttle {
+        bat_throttle
+    } else {
+        temp_throttle
+    }
+}
+
+fn pwms(state: &State) -> (u8, u8) {
+    if state.high_beam {
+        (
+            ((POWER_LEVELS_LOW_AUX[state.power_level] as u32) * state.throttle / 100) as u8,
+            ((POWER_LEVELS_HIGH[state.power_level] as u32) * state.throttle / 100) as u8,
+        )
+    } else {
+        (
+            ((POWER_LEVELS_LOW[state.power_level] as u32) * state.throttle / 100) as u8,
+            0,
+        )
     }
 }
