@@ -6,7 +6,6 @@ use crate::bsp::pin::Pin;
 use crate::bsp::rgb::{Rgb, BLUE, GREEN, RED};
 use crate::control::ButtonState::{Clicked, LongClicked, Nothing};
 use crate::edt::EDT;
-use crate::voltage_to_temp::voltage_to_temp;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy)]
 pub enum Action {
@@ -304,7 +303,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
 
     /// https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
     fn check_battery_and_temperature(&self) {
-        let temp = voltage_to_temp(self.sensors.temp());
+        let temp = self.sensors.temp();
         if temp > 70 {
             // high beam off and low power
             self.change_state(State {

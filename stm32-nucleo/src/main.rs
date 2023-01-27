@@ -22,9 +22,8 @@ use light_control::bsp::adc::Sensors;
 use light_control::bsp::led::Led;
 use light_control::bsp::pin::Pin;
 use light_control::bsp::rgb::Rgb;
-use light_control::control::{battery_voltage_to_capacity, LightControl};
+use light_control::control::LightControl;
 use light_control::edt::{Event, EDT};
-use light_control::voltage_to_temp::voltage_to_temp;
 
 use crate::adc::AdcSensors;
 use crate::button::PullUpButton;
@@ -126,16 +125,15 @@ fn main() -> ! {
                 watchdog.feed();
                 light_control.process_message(msg);
                 if edt.now() > prev_logged_time + 2000 {
-                    let voltage: u32 = sensors.battery_voltage(led_high.get(), led_low.get());
+                    let capacity: u32 = sensors.battery_voltage(led_high.get(), led_low.get());
 
                     writeln!(
                         output,
-                        "h: {}% l: {}% v: {}, {}%, t: {}",
+                        "h: {}% l: {}% b: {}% t: {}",
                         led_high.get(),
                         led_low.get(),
-                        voltage,
-                        battery_voltage_to_capacity(voltage),
-                        voltage_to_temp(sensors.temp()),
+                        capacity,
+                        sensors.temp(),
                     )
                     .unwrap();
                     prev_logged_time = edt.now();
@@ -163,7 +161,11 @@ struct SensorPin<'a> {
 }
 
 impl Pin for SensorPin<'_> {
+    /// Since I was too lazy to disassemble the light to add a wire for
+    /// a temp sensor, I have reused the wire for the minus button
+    /// When voltage drops to 0, temperature goes into overdrive
+    /// which means the button is pressed
     fn is_down(&self) -> bool {
-        self.sensors.temp() < 10
+        self.sensors.temp() >= 110
     }
 }

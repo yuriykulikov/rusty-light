@@ -1,4 +1,5 @@
 #![no_std]
+pub mod battery_voltage_to_capacity;
 pub mod bsp;
 pub mod control;
 pub mod edt;

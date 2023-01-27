@@ -3,15 +3,20 @@ pub fn voltage_to_temp(voltage: u32) -> i32 {
     if voltage > 2363 {
         0
     } else if voltage > 1352 {
+        // 0 - 33
         76 - (voltage * 32 / 1000)
     } else if voltage > 971 {
+        // 34 - 48
         87 - voltage * 40 / 1000
     } else if voltage > 664 {
+        // 50 - 65
         98 - voltage * 50 / 1000
     } else if voltage > 411 {
+        // 67 - 83
         112 - voltage * 70 / 1000
     } else {
-        85
+        // 84 - 110 good approximation, then diverges
+        139 - voltage * 130 / 1000
     }
 }
 

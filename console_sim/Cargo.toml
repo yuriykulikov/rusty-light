@@ -7,8 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crossterm = { version = "0.19" }
+crossterm = { version = "0.25.0" }
 keyboard_query = "0.1.0"
 light_control = { path = "../light_control" }
-tui = { version = "0.14", default-features = false, features = ['crossterm', 'serde'] }
+tui = { version = "0.19.0", default-features = false, features = ['crossterm', 'serde'] }
 tokio = { version = "1.6", features = ["full"] }

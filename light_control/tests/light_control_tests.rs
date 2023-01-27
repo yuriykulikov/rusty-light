@@ -364,8 +364,8 @@ mod tests {
             8000
         }
 
-        fn temp(&self) -> u32 {
-            1650
+        fn temp(&self) -> i32 {
+            30
         }
     }
 }

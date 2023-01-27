@@ -5,6 +5,7 @@ use stm_hal::hal::adc::Channel;
 
 use light_control::bsp::adc::Sensors;
 use light_control::perceived_light_math::current_ma;
+use light_control::voltage_to_temp::voltage_to_temp;
 
 pub struct AdcSensors<V: Channel<Adc, ID = u8>, T: Channel<Adc, ID = u8>> {
     pub adc: RefCell<Adc>,
@@ -40,13 +41,13 @@ where
         }
     }
 
-    fn temp(&self) -> u32 {
+    fn temp(&self) -> i32 {
         let measured = self
             .adc
             .borrow_mut()
             .read_voltage(&mut *self.vin_temp.borrow_mut())
             .unwrap() as u32;
-        measured
+        voltage_to_temp(measured)
     }
 }
 
