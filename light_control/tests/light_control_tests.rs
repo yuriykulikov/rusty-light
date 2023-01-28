@@ -114,7 +114,7 @@ mod tests {
             advance_time(2000);
             assert_eq!(low_beam.get(), low(3));
             buttons.click_toggle();
-            assert_eq!(low_beam.get(), low_aux(3));
+            assert_eq!(low_beam.get(), low_aux(3) * 100 / 140);
             assert_eq!(high_beam.get(), high(3));
         });
     }
@@ -126,7 +126,7 @@ mod tests {
             advance_time(2000);
             buttons.click_toggle();
             buttons.click_plus();
-            assert_eq!(low_beam.get(), low_aux(4));
+            assert_eq!(low_beam.get(), low_aux(4) * 100 / 140);
             assert_eq!(high_beam.get(), high(4));
         });
     }
@@ -141,7 +141,7 @@ mod tests {
             buttons.click_minus();
             buttons.click_minus();
             buttons.click_minus();
-            assert_eq!(low_beam.get(), low_aux(1));
+            assert_eq!(low_beam.get(), low_aux(1) * 100 / 140);
             assert_eq!(high_beam.get(), high(1));
         });
     }
@@ -361,11 +361,11 @@ mod tests {
 
     impl Sensors for TestSensors {
         fn battery_voltage(&self, _high_percentage: u32, _low_percentage: u32) -> u32 {
-            8000
+            8400
         }
 
         fn temp(&self) -> i32 {
-            30
+            20
         }
     }
 }

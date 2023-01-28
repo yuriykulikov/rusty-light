@@ -29,9 +29,17 @@ pub enum Action {
 pub const BUTTON_CHECK_PERIOD: u32 = 50;
 pub const LONG_CLICK_THRESHOLD: u32 = 1000;
 
-pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 25, 50, 75, 100];
-pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 25, 45, 60, 80];
-pub const POWER_LEVELS_HIGH: &'static [u8] = &[0, 60, 80, 90, 100];
+// 3 or 4 modes?
+// currently max is too bright
+// and 3 with high beam is too bright
+// pub const POWER_LEVELS_LOW: &'static [u8] = &[0, 25, 50, 75, 100];
+// pub const POWER_LEVELS_LOW_AUX: &'static [u8] = &[0, 25, 45, 60, 80];
+// pub const POWER_LEVELS_HIGH: &'static [u8] = &[0, 60, 80, 90, 100];
+
+pub const POWER_LEVELS: &'static [u8] = &[0, 15, 40, 65, 85];
+pub const POWER_LEVELS_LOW: &'static [u8] = POWER_LEVELS;
+pub const POWER_LEVELS_LOW_AUX: &'static [u8] = POWER_LEVELS;
+pub const POWER_LEVELS_HIGH: &'static [u8] = POWER_LEVELS;
 
 pub const POWER_LEVEL_INIT: usize = 3;
 
@@ -450,15 +458,24 @@ fn calc_throttle(temperature: i32, battery_capacity: u32) -> u32 {
 }
 
 fn pwms(state: &State) -> (u8, u8) {
+    let level = POWER_LEVELS[state.power_level] as u32;
     if state.high_beam {
         (
-            ((POWER_LEVELS_LOW_AUX[state.power_level] as u32) * state.throttle / 100) as u8,
-            ((POWER_LEVELS_HIGH[state.power_level] as u32) * state.throttle / 100) as u8,
+            (level * state.throttle / 140) as u8,
+            (level * state.throttle / 100) as u8,
         )
     } else {
-        (
-            ((POWER_LEVELS_LOW[state.power_level] as u32) * state.throttle / 100) as u8,
-            0,
-        )
+        ((level * state.throttle / 100) as u8, 0)
     }
+    // if state.high_beam {
+    //     (
+    //         ((POWER_LEVELS_LOW_AUX[state.power_level] as u32) * state.throttle / 100) as u8,
+    //         ((POWER_LEVELS_HIGH[state.power_level] as u32) * state.throttle / 100) as u8,
+    //     )
+    // } else {
+    //     (
+    //         ((POWER_LEVELS_LOW[state.power_level] as u32) * state.throttle / 100) as u8,
+    //         0,
+    //     )
+    // }
 }
