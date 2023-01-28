@@ -4,13 +4,13 @@
 
 extern crate cortex_m;
 extern crate cortex_m_rt as rt;
-extern crate jlink_rtt;
+// extern crate jlink_rtt;
 extern crate nb;
 extern crate panic_halt;
 extern crate stm32g0xx_hal as stm_hal;
 
 use core::cell::{Cell, RefCell};
-use core::fmt::Write;
+// use core::fmt::Write;
 
 use nb::block;
 use rt::{entry, exception, ExceptionFrame};
@@ -117,27 +117,27 @@ fn main() -> ! {
     light_control.start();
     light_control.jump_start();
 
-    let mut output = jlink_rtt::NonBlockingOutput::new();
-    let mut prev_logged_time = 0;
+    // let mut output = jlink_rtt::NonBlockingOutput::new();
+    // let mut prev_logged_time = 0;
     loop {
         match edt.poll() {
             Event::Execute { msg } => {
                 watchdog.feed();
                 light_control.process_message(msg);
-                if edt.now() > prev_logged_time + 2000 {
-                    let capacity: u32 = sensors.battery_voltage(led_high.get(), led_low.get());
-
-                    writeln!(
-                        output,
-                        "h: {}% l: {}% b: {}% t: {}",
-                        led_high.get(),
-                        led_low.get(),
-                        capacity,
-                        sensors.temp(),
-                    )
-                    .unwrap();
-                    prev_logged_time = edt.now();
-                }
+                // if edt.now() > prev_logged_time + 2000 {
+                //     let capacity: u32 = sensors.battery_voltage(led_high.get(), led_low.get());
+                //
+                //     writeln!(
+                //         output,
+                //         "h: {}% l: {}% b: {}% t: {}",
+                //         led_high.get(),
+                //         led_low.get(),
+                //         capacity,
+                //         sensors.temp(),
+                //     )
+                //     .unwrap();
+                //     prev_logged_time = edt.now();
+                // }
             }
             Event::Wait { ms } => {
                 timer.start(ms.ms());
