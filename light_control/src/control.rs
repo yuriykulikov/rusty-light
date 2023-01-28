@@ -328,9 +328,27 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
             self.edt
                 .schedule(3000, Action::IndicateBatteryAndTemperature);
         } else {
-            self.indicate_click();
-            self.edt
-                .schedule(10000, Action::IndicateBatteryAndTemperature);
+            let capacity = self.battery_capacity();
+            if capacity > 40 {
+                self.blink(Self::battery_color(capacity), 1, 500);
+                self.edt
+                    .schedule(10000, Action::IndicateBatteryAndTemperature);
+            } else if capacity > 10 {
+                self.blink(Self::battery_color(capacity), 1, 500);
+                // 10 seconds at 40%, 5 seconds at 20%
+                self.edt
+                    .schedule(capacity * 250, Action::IndicateBatteryAndTemperature);
+            } else if capacity >= 5 {
+                self.blink(RED, 3, 100);
+                // 60 BPS at 13%
+                self.edt
+                    .schedule(capacity * 130, Action::IndicateBatteryAndTemperature);
+            } else {
+                // ~90 BPS
+                self.blink(RED, 3, 100);
+                self.edt
+                    .schedule(660, Action::IndicateBatteryAndTemperature);
+            };
         };
     }
 
