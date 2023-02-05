@@ -7,5 +7,7 @@ if [ -n "${RS_FILES}" ]; then
       cargo fmt --all
     )
     # shellcheck disable=SC2046
-    git add $(echo "$RS_FILES" | paste -s -d " " -)
+    # removing git add does not apply formatting before commit,
+    # but it allows to use intellij interactive commits
+    # git add $(echo "$RS_FILES" | paste -s -d " " -)
 fi
