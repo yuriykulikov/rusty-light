@@ -1,2 +1,3 @@
 [workspace]
 members = ["console_sim", "light_control", "stm32-nucleo"]
+exclude = ["embassy/nrf52840"]
