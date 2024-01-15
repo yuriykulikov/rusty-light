@@ -228,7 +228,7 @@ impl<'a, P: Pin, M: Pin, T: Pin> LightControl<'a, P, M, T> {
 
         match self.plus_pin.check_state(BUTTON_CHECK_PERIOD) {
             Clicked => self.on_plus_clicked(),
-            LongClicked => self.on_long_clicked(),
+            LongClicked => self.on_minus_clicked(),
             Nothing => {}
         }
 
