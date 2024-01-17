@@ -3,21 +3,21 @@
 
 use core::mem;
 
-use defmt::{info, panic, unwrap};
+use defmt::{panic, unwrap};
 use embassy_executor::Spawner;
-use embassy_futures::select::{Either, select};
-use embassy_nrf::{bind_interrupts, pac, peripherals, usb};
+use embassy_futures::select::{select, Either};
 use embassy_nrf::gpio::{AnyPin, Input, Level, Output, OutputDrive, Pin, Pull};
 use embassy_nrf::peripherals::USBD;
-use embassy_nrf::usb::Driver;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
+use embassy_nrf::usb::Driver;
+use embassy_nrf::{bind_interrupts, pac, peripherals, usb};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::{Channel, Receiver, Sender};
 use embassy_time::{Duration, Timer};
-use embassy_usb::{Builder, Config, UsbDevice};
 use embassy_usb::class::cdc_acm;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::driver::EndpointError;
+use embassy_usb::{Builder, Config, UsbDevice};
 use static_cell::StaticCell;
 
 use {defmt_rtt as _, panic_probe as _};
@@ -35,7 +35,6 @@ enum LedAction {
     PURPLE,
     BLINK,
 }
-static CONSOLE_RECEIVER: StaticCell<Channel<NoopRawMutex, ([u8; 64], usize), 1>> = StaticCell::new();
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -43,12 +42,11 @@ async fn main(spawner: Spawner) {
     enable_external_osc();
 
     static LED_CHANNEL: StaticCell<Channel<NoopRawMutex, LedAction, 1>> = StaticCell::new();
-    static CONSOLE_OUT_CHANNEL: StaticCell<Channel<NoopRawMutex,  [u8; 64], 1>> = StaticCell::new();
+    static CONSOLE_OUT_CHANNEL: StaticCell<Channel<NoopRawMutex, [u8; 64], 1>> = StaticCell::new();
 
     let led_channel: &mut Channel<NoopRawMutex, LedAction, 1> = LED_CHANNEL.init(Channel::new());
-    let _console_out: &mut Channel<NoopRawMutex, [u8; 64], 1> = CONSOLE_OUT_CHANNEL.init(Channel::new());
-    // TODO use consistent approach to creating channels
-    let console_in = CONSOLE_RECEIVER.init(Channel::new());
+    let _console_out: &mut Channel<NoopRawMutex, [u8; 64], 1> =
+        CONSOLE_OUT_CHANNEL.init(Channel::new());
 
     let mut usb_builder = usb_builder(p.USBD);
     static STATE: StaticCell<State> = StaticCell::new();
@@ -56,22 +54,17 @@ async fn main(spawner: Spawner) {
     let class = CdcAcmClass::new(&mut usb_builder, state, 64);
 
     unwrap!(spawner.spawn(usb_task(usb_builder.build())));
-    let (_sender, receiver) = class.split();
-    unwrap!(spawner.spawn(reader_task(receiver, console_in.sender())));
-
-    unwrap!(spawner.spawn(cli_task(console_in.receiver(), led_channel.sender())));
-
+    let (sender, receiver) = class.split();
+    unwrap!(spawner.spawn(cli_task(receiver, led_channel.sender())));
+    unwrap!(spawner.spawn(announce_task(sender)));
     unwrap!(spawner.spawn(led_task(
-        p.P0_26.degrade(),
-        p.P0_30.degrade(),
-        p.P0_06.degrade(),
+        p.P1_14.degrade(),
+        p.P1_13.degrade(),
+        p.P1_15.degrade(),
         led_channel.receiver(),
     )));
 
-    unwrap!(spawner.spawn(button_task(
-        p.P1_15.degrade(),
-        led_channel.sender(),
-    )));
+    unwrap!(spawner.spawn(button_task(p.P0_03.degrade(), led_channel.sender(),)));
 }
 
 fn enable_external_osc() {
@@ -82,13 +75,12 @@ fn enable_external_osc() {
 
 type USBDDriver = Driver<'static, peripherals::USBD, HardwareVbusDetect>;
 
-/// TODO lifetime
 fn usb_builder(usbd: USBD) -> Builder<'static, USBDDriver> {
     let driver = Driver::new(usbd, Irqs, HardwareVbusDetect::new(Irqs));
 
     let mut config = Config::new(0xc0de, 0xcafe);
-    config.manufacturer = Some("Embassy");
-    config.product = Some("USB-serial example");
+    config.manufacturer = Some("rusty-light");
+    config.product = Some("console");
     config.serial_number = Some("12345678");
     config.max_power = 100;
     config.max_packet_size_0 = 64;
@@ -126,7 +118,12 @@ async fn usb_task(mut device: UsbDevice<'static, USBDDriver>) {
 
 /// Passed params need to be moved and static
 #[embassy_executor::task]
-async fn led_task(r: AnyPin, g: AnyPin, b: AnyPin, receiver: Receiver<'static, NoopRawMutex, LedAction, 1>) {
+async fn led_task(
+    r: AnyPin,
+    g: AnyPin,
+    b: AnyPin,
+    receiver: Receiver<'static, NoopRawMutex, LedAction, 1>,
+) {
     let mut led_r = Output::new(r, Level::High, OutputDrive::Standard);
     let mut led_g = Output::new(g, Level::High, OutputDrive::Standard);
     let mut led_b = Output::new(b, Level::High, OutputDrive::Standard);
@@ -136,7 +133,8 @@ async fn led_task(r: AnyPin, g: AnyPin, b: AnyPin, receiver: Receiver<'static, N
         let select = select(
             receiver.receive(),
             handle_action(next_action, &mut led_r, &mut led_g, &mut led_b),
-        ).await;
+        )
+        .await;
 
         next_action = match select {
             Either::First(interrupting_action) => interrupting_action,
@@ -145,7 +143,12 @@ async fn led_task(r: AnyPin, g: AnyPin, b: AnyPin, receiver: Receiver<'static, N
     }
 }
 
-async fn handle_action<'a>(led_action: LedAction, led_r: &mut Output<'a, AnyPin>, led_g: &mut Output<'a, AnyPin>, led_b: &mut Output<'a, AnyPin>) {
+async fn handle_action<'a>(
+    led_action: LedAction,
+    led_r: &mut Output<'a, AnyPin>,
+    led_g: &mut Output<'a, AnyPin>,
+    led_b: &mut Output<'a, AnyPin>,
+) {
     led_r.set_high();
     led_g.set_high();
     led_b.set_high();
@@ -185,7 +188,11 @@ async fn handle_action<'a>(led_action: LedAction, led_r: &mut Output<'a, AnyPin>
     }
 }
 
-async fn blink<'a>(led_r: &mut Output<'a, AnyPin>, led_g: &mut Output<'a, AnyPin>, led_b: &mut Output<'a, AnyPin>) {
+async fn blink<'a>(
+    led_r: &mut Output<'a, AnyPin>,
+    led_g: &mut Output<'a, AnyPin>,
+    led_b: &mut Output<'a, AnyPin>,
+) {
     led_b.set_low();
     Timer::after(Duration::from_millis(300)).await;
     led_b.set_high();
@@ -206,7 +213,8 @@ async fn button_task(pin: AnyPin, led: Sender<'static, NoopRawMutex, LedAction, 
             Timer::after(Duration::from_millis(500)),
             input.wait_for_high(),
         )
-            .await {
+        .await
+        {
             Either::First(_) => {
                 // long click
                 led.send(LedAction::RED).await;
@@ -234,37 +242,36 @@ impl From<EndpointError> for Disconnected {
 }
 
 #[embassy_executor::task]
-async fn reader_task(
-    mut receiver: cdc_acm::Receiver<'static, USBDDriver>,
-    console_in_sender: Sender<'static, NoopRawMutex, ([u8; 64], usize), 1>,
-) {
+async fn announce_task(mut sender: cdc_acm::Sender<'static, USBDDriver>) {
     loop {
-        receiver.wait_connection().await;
-        info!("Connected");
-        let _ = try_read(&mut receiver, &console_in_sender).await;
-        info!("Disconnected");
-    }
-}
-
-/// TODO how can I fix lifetimes?
-async fn try_read<'a>(
-    receiver: &mut cdc_acm::Receiver<'static, USBDDriver>,
-    console_in_sender: &Sender<'a, NoopRawMutex, ([u8; 64], usize), 1>,
-) -> Result<(), Disconnected> {
-    let mut buf = [0; 64];
-    loop {
-        let n = receiver.read_packet(&mut buf).await?;
-        console_in_sender.send((buf, n)).await;
+        sender.wait_connection().await;
+        loop {
+            if sender.write_packet(b"Hello World!\r\n").await.is_err() {
+                break;
+            }
+            Timer::after(Duration::from_secs(1)).await;
+        }
     }
 }
 
 #[embassy_executor::task]
 async fn cli_task(
-    console_in_receiver: Receiver<'static, NoopRawMutex, ([u8; 64], usize), 1>,
+    mut receiver: cdc_acm::Receiver<'static, USBDDriver>,
     led_sender: Sender<'static, NoopRawMutex, LedAction, 1>,
 ) {
     loop {
-        let (buf, n) = console_in_receiver.receive().await;
+        receiver.wait_connection().await;
+        let _ = read_until_disconnected(&mut receiver, &led_sender).await;
+    }
+}
+
+async fn read_until_disconnected<'a>(
+    receiver: &mut cdc_acm::Receiver<'static, USBDDriver>,
+    led_sender: &Sender<'static, NoopRawMutex, LedAction, 1>,
+) -> Result<(), Disconnected> {
+    let mut buf = [0; 64];
+    loop {
+        let n = receiver.read_packet(&mut buf).await?;
         let data = &buf[..n];
         on_console_command(&led_sender, data).await;
     }
